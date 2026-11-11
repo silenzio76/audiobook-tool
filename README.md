@@ -34,7 +34,7 @@ and reported as an error.
 The export includes only the explicit `EXPORT_FILES` allowlist. It excludes local
 profiles, pronunciation dictionaries, chapters and saved plans, voice samples,
 models, runtime environments, caches, generated audio, backups, Git history and
-book-specific scripts. Only the two new neutral test modules are exported.
+book-specific scripts. Only neutral software test modules are exported.
 The exported directory can rebuild itself using the same command.
 The included `.gitignore` also excludes local plans, voice data, media, runtime
 directories and temporary files from a future repository. It does not remove
@@ -107,11 +107,14 @@ Source export and neutral tests require only Python's standard library. The
 desktop editor requires `requirements-editor.txt`. Windows synthesis uses the
 installed OneCore voices and `voce_windows.ps1`; audio transformations need FFmpeg.
 Qwen synthesis additionally requires its isolated runtime, model weights and
-voice resources. The existing Qwen installer expects a local uv executable and
-a CUDA GPU; those resources are not bundled. A supported Python-version matrix,
-pinned optional dependencies, repeatable installation and clean-Windows testing
-remain milestone 2 work. Do not treat a successful source smoke test as proof of
-installation, desktop playback or synthesis on a clean machine.
+voice resources and a CUDA GPU; those resources are not bundled. The new installer
+uses standard venv/pip instead of requiring uv. See [INSTALLATION.md](INSTALLATION.md)
+for isolated core/editor/Qwen installers, pinned dependencies, offline prerequisite
+checks and the Python target matrix. Missing prerequisites are checked before
+starting a synthesis backend. The optional Qwen lock is a measured Windows/Python
+3.12 baseline; models and voices are never installed automatically. Clean-Windows
+testing by a second operator remains open. A source smoke test does not certify
+installation, desktop playback or pronunciation on a clean machine.
 
 ## Development builds and automatic commits
 

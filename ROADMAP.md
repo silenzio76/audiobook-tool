@@ -2,11 +2,17 @@
 
 Recorded on 2026-11-09. Implementation is planned in the order below. The first milestone is a reproducible Windows tool for manuscript review. A public audiobook and a tool distributed to other authors are separate release decisions.
 
+Current status (2026-11-11): the initial public source release `v0.1.0` is
+published at `silenzio76/audiobook-tool`. Milestone 2 has implemented English
+project materials, pinned installation profiles and preflight checks; its
+clean-Windows second-operator acceptance test remains open. Verified code changes
+increment BUILD and are committed automatically through `dev_commit.py`.
+
 ## 1. Standalone GitHub repository and releases
 
 - Establish a dedicated GitHub repository for the audiobook tool. Decide ownership, visibility, licensing and the history to import before the first push. Review the import for manuscript text, chapter plans, voice samples, credentials, caches and generated outputs. Use original or cleared fixtures in the repository.
 - Define the supported compatibility contract, including saved plans and profiles, documented CLI options and output formats. Use `MAJOR.MINOR.PATCH` for releases. Increment MAJOR for incompatible changes to that contract, MINOR for compatible features and PATCH for compatible fixes. Keep one authoritative release version and use tags such as `v1.2.3` with English release notes.
-- Assign each build a distinct identifier linked to its version, commit and build run, for example `1.2.3+build.47` in the build manifest. Build metadata identifies the artifact and does not affect SemVer precedence. Record a checksum for each distributable and verify that a clean checkout can reproduce the build process. The initial release version remains open.
+- Assign each build a distinct identifier linked to its version, commit and build run, for example `1.2.3+build.47` in the build manifest. Build metadata identifies the artifact and does not affect SemVer precedence. Record a checksum for each distributable and verify that a clean checkout can reproduce the build process. The initial source release is `0.1.0`; published tags and assets remain immutable.
 
 References: [Semantic Versioning 2.0.0](https://semver.org/) and [GitHub releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
 
@@ -54,6 +60,15 @@ in a separate pass. Executable ASTs for translation-only modules were compared
 with the originals, excluding documentation strings; localized strings and
 serialized values are retained. BUILD and automatic verified commits are now
 part of the repository workflow. The installation/dependency pass follows.
+
+Installation checkpoint: `install_environment.py` creates profile-specific venvs,
+applies exact Qt or measured Qwen package pins and runs package checks. The offline
+`environment_check.py` reports missing/incompatible Python, packages, Windows
+voices, FFmpeg and optional model/native resources. Generation calls preflight
+before backend execution. `INSTALLATION.md` describes setup, updates, the original
+sample and recovery. No model/voice download is implicit. Automated failure and
+fresh-venv checks do not replace the still-open clean-Windows second-operator
+acceptance test; milestone 2 remains open for that observed human workflow.
 
 - Use English for all project-owned code comments, docstrings and supporting files, including the README, roadmap, changelog, installation and troubleshooting guides, configuration comments, example documentation and release notes. Translate existing material in a dedicated pass and check that code behavior and serialized values are preserved. Manuscript excerpts, linguistic fixtures and localized user-facing text retain their intended languages.
 - Inventory supported Python versions and separate core dependencies from optional engines, external executables, model weights and voice resources. Declare and pin the versions needed for supported builds, with a documented install and update path. Check availability, compatible versions and prerequisites before generation. Report what is missing and how to fix it.

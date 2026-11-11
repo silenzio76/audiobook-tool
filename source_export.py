@@ -18,6 +18,8 @@ EXPORT_FILES = (
     '.gitignore', '.gitattributes', 'README.md', 'ROADMAP.md', 'LICENSE', 'VERSION', 'CHANGELOG.md',
     'source_export.py', 'version_info.py', 'BUILD', 'AGENTS.md',
     'dev_commit.py', 'test_dev_commit.py',
+    'environment_check.py', 'install_environment.py', 'test_environment.py',
+    'INSTALLATION.md', 'requirements-qwen.txt', 'requirements-qwen-torch.txt', 'example.md',
     'audiolibro.py', 'analisi_audio.py', 'converti_audio.py',
     'editor_audiolibro.py', 'equalizzatore_voci.py', 'gestione_voci.py',
     'installa_qwen.py', 'lingue_audio.py', 'montaggio_audio.py',

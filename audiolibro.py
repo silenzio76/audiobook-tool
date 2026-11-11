@@ -355,6 +355,8 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
             subset = [item for item in synthesis_jobs if item['engine'] == engine]
             if not subset:
                 continue
+            from environment_check import ensure_generation_ready
+            ensure_generation_ready(engine, subset, HERE)
             job = work / (engine + '.json')
             job.write_text(json.dumps(subset, ensure_ascii=False), encoding='utf-8-sig')
             if engine == 'windows':
@@ -806,6 +808,10 @@ def reading_plan(source):
 
 def editor(path=None, auto_read=False):
     import sys
+    from environment_check import inspect_environment
+    report = inspect_environment('editor', HERE)
+    if not report['ok']:
+        raise SystemExit('Editor prerequisites failed. Run environment_check.py --profile editor; see INSTALLATION.md.')
     try:
         from editor_audiolibro import run
     except ModuleNotFoundError as error:

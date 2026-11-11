@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added isolated core/editor/Qwen installation plans, exact Qt pins, the measured
+  Qwen dependency lock and an English installation/troubleshooting guide.
+- Added offline prerequisite reports and synthesis preflight checks. Missing
+  engines/resources fail before starting the backend, preserving existing audio.
+- Retained `installa_qwen.py` as a Python 3.12 compatibility entry point, with no
+  global installation or implicit downloads of models or voices.
+
 - Added the persistent automatic build/commit workflow. Each verified code change
   increments `BUILD`; the CLI and source manifest expose `VERSION+build.N`.
 - Translated project-owned Python comments and docstrings into English, preserving
