@@ -9,17 +9,15 @@ updates:
     groups:
       qt-patches:
         patterns:
-          - PySide6
-          - PySide6_Addons
-          - PySide6_Essentials
+          - PySide6*
+          - pyside6*
           - shiboken6
       qwen-python-patches:
         patterns:
           - '*'
         exclude-patterns:
-          - PySide6
-          - PySide6_Addons
-          - PySide6_Essentials
+          - PySide6*
+          - pyside6*
           - shiboken6
           - torch
           - torchaudio

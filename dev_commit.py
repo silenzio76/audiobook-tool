@@ -30,7 +30,7 @@ def atomic_bytes(path, payload):
 
 
 def needs_build(names):
-    return any(Path(name).suffix in ('.py', '.ps1', '.cmd', '.sh')
+    return any(Path(name).suffix in ('.py', '.ps1', '.cmd', '.sh', '.yml', '.yaml')
                or name in ('VERSION', 'BUILD', '.gitattributes')
                or name.startswith('requirements-') for name in names)
 

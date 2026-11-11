@@ -49,7 +49,7 @@ class BuildPolicyTests(unittest.TestCase):
             self.assertEqual(target.read_bytes(), modified)
 
     def test_code_and_dependencies_require_builds_but_docs_do_not(self):
-        for name in ('audiolibro.py', 'voce_windows.ps1', 'VERSION', 'requirements-editor.txt'):
+        for name in ('audiolibro.py', 'voce_windows.ps1', 'VERSION', 'requirements-editor.txt', '.github/dependabot.yml'):
             self.assertTrue(needs_build({name}))
         self.assertFalse(needs_build({'README.md', 'ROADMAP.md'}))
 
