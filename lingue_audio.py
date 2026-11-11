@@ -1,4 +1,4 @@
-"""Instradamento conservativo per scrittura e lessico esplicito, non traduzione."""
+"""Conservative script and explicit-lexicon routing without translation."""
 import json
 from pathlib import Path
 import re
@@ -22,9 +22,9 @@ def segment_language(plan, segment):
     return plan.get('language', 'auto') if selected == 'auto' else selected
 
 
-# Indizi locali. Un indizio a sinistra deve terminare prima dell'omografo;
-# un indizio a destra deve iniziare subito dopo. Punteggiatura e cambi di
-# lingua interrompono il contesto.
+# Local cues: a left cue must end before the homograph;
+# a right cue must begin immediately after it. Punctuation and language
+# switches terminate the context.
 OMOGRAPHS = {
     'pesca': (
         ('pèsca', r"(?:mangiò|mangia|sbucciò|sbuccia|addentò|addenta|raccolse) (?:una|la)", r"matura|succosa|acerba"),
@@ -65,7 +65,7 @@ CONTEXT_RULES = {
 def italian_speech(text):
     def resolve(match):
         word = match.group()
-        # Le finestre limitano il lavoro anche nei paragrafi lunghi.
+        # Context windows bound the work even for long paragraphs.
         left = text[max(0, match.start() - 72):match.start()]
         right = text[match.end():match.end() + 72]
         choices = [accent for accent, before, after in CONTEXT_RULES[word.lower()]

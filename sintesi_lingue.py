@@ -1,4 +1,4 @@
-"""eSpeak NG locale per lingue non supportate da Qwen; voce tecnica separata."""
+"""Local eSpeak NG fallback for languages Qwen does not support."""
 import ctypes
 
 

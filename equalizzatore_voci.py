@@ -1,4 +1,4 @@
-"""Equalizzazione parametrica dei campioni vocali PCM a 16 bit."""
+"""Parametric equalization of 16-bit PCM voice samples."""
 from array import array
 import math
 import sys

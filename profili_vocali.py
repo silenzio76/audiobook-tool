@@ -1,4 +1,4 @@
-"""Profili editoriali locali: configurazione validata e toni per segmento."""
+"""Local editorial profiles with validated settings and per-segment delivery."""
 import json
 from pathlib import Path
 
@@ -43,7 +43,7 @@ def tone_label(value):
 
 def delivery(value):
     names=tone_names(value)
-    # Media per evitare accelerazioni/deformazioni esponenziali incrociando molti toni.
+    # Average combined tones to avoid exponential speed and pitch changes.
     speed=max(.75,min(1.25,sum(TONE_SPEEDS[n] for n in names)/len(names)))
     gain=.5 if 'Sussurrato' in names else .8 if 'Sommesso' in names else 1.12 if 'Urlante' in names else 1
     return speed,gain

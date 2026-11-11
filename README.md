@@ -42,8 +42,8 @@ anything that has already been committed and is not a substitute for review.
 
 The allowlist is an inclusion boundary, not proof that included code is free of
 credentials or third-party material. Review the actual candidate before upload.
-Existing source code still contains series character names and Italian comments;
-English translation belongs to roadmap milestone 2. The public repository and
+Source presets retain series character names and localized strings. Comments and
+docstrings are now English. The public repository and
 initial version `0.1.0` are authorized by the owner. `VERSION` is the only
 authoritative release version. Default exports record `release: false` and
 `source_commit: null`; hashes identify a candidate without commit provenance.
@@ -83,7 +83,7 @@ The project-wide production tests remain in the manuscript workspace.
 The existing serialized plan and profile schema version remains `1`. This change
 does not migrate saved plans, profiles, narration settings or pronunciation rules.
 Existing CLI commands remain `prepara`, `editor`, `leggi`, `esporta` and `analizza`.
-`python audiolibro.py --version` prints the authoritative release version.
+`python audiolibro.py --version` prints the release version and build number.
 Use `python audiolibro.py --help` and command-specific `--help` for arguments:
 
 ```text
@@ -112,6 +112,24 @@ a CUDA GPU; those resources are not bundled. A supported Python-version matrix,
 pinned optional dependencies, repeatable installation and clean-Windows testing
 remain milestone 2 work. Do not treat a successful source smoke test as proof of
 installation, desktop playback or synthesis on a clean machine.
+
+## Development builds and automatic commits
+
+`VERSION` identifies releases; `BUILD` counts verified development code changes.
+The original 0.1.0 release is baseline build 1. After a coherent code change run:
+
+```text
+python dev_commit.py --message "Describe the completed change"
+```
+
+The command checks the allowlist, increments BUILD, runs the neutral regression
+suite and commits automatically. Failed tests restore the previous counter and
+leave the code uncommitted for correction. An already-staged index is preserved
+and rejected for review. Documentation-only commits retain the build number.
+The CLI reports a version such as `0.1.0+build.2`; export manifests carry both
+the numeric build and the build version. Each export also has its own run ID.
+This is a verified-change workflow, not a watcher committing every keystroke.
+Published tags/assets remain immutable; development commits do not create releases.
 
 ## License and optional resources
 

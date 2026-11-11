@@ -16,7 +16,8 @@ HERE = Path(__file__).resolve().parent
 # No recursive discovery: adding a file requires a deliberate allowlist edit.
 EXPORT_FILES = (
     '.gitignore', '.gitattributes', 'README.md', 'ROADMAP.md', 'LICENSE', 'VERSION', 'CHANGELOG.md',
-    'source_export.py', 'version_info.py',
+    'source_export.py', 'version_info.py', 'BUILD', 'AGENTS.md',
+    'dev_commit.py', 'test_dev_commit.py',
     'audiolibro.py', 'analisi_audio.py', 'converti_audio.py',
     'editor_audiolibro.py', 'equalizzatore_voci.py', 'gestione_voci.py',
     'installa_qwen.py', 'lingue_audio.py', 'montaggio_audio.py',
@@ -88,6 +89,9 @@ def make_archive(payloads, build_id, *, source_commit=None, release=False):
         raise ValueError('Invalid authoritative VERSION.')
     if release and not re.fullmatch(r'[0-9a-f]{40,64}', source_commit or ''):
         raise ValueError('Release builds require verified Git commit provenance.')
+    build_text = payloads['BUILD'].decode('ascii').strip()
+    if not re.fullmatch(r'[1-9][0-9]*', build_text):
+        raise ValueError('Invalid authoritative BUILD.')
     files = {name: {'sha256': digest(payload), 'bytes': len(payload)}
              for name, payload in sorted(payloads.items())}
     manifest = {
@@ -95,6 +99,8 @@ def make_archive(payloads, build_id, *, source_commit=None, release=False):
         'kind': 'source-release' if release else 'source-candidate',
         'release': release,
         'release_version': version,
+        'build_number': int(build_text),
+        'build_version': version + '+build.' + build_text,
         'license': 'GPL-3.0-or-later',
         'repository': 'https://github.com/silenzio76/audiobook-tool',
         'source_commit': source_commit,
@@ -106,7 +112,7 @@ def make_archive(payloads, build_id, *, source_commit=None, release=False):
         'pending_decisions': [],
         'review_limits': [
             'The allowlist excludes local data; it is not a credential or copyright audit.',
-            'Legacy code still contains series character names and Italian comments.',
+            'Source presets retain series character names; localized strings remain Italian.',
             'No clean-machine installation, GUI or synthesis is certified.',
         ],
     }

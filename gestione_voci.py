@@ -1,4 +1,4 @@
-"""Azioni dell'editor: assegnazioni, profili e sovrapposizione di voci."""
+"""Editor actions for assignments, profiles and overlapping voices."""
 from ui_language import tr
 import copy
 from pathlib import Path
@@ -195,7 +195,7 @@ def set_narrator_reference(name):
 
 
 def mix_group(paths, output):
-    """Coro parlato sintetico: voci sovrapposte, non canto armonizzato."""
+    """Synthetic spoken chorus with overlapping voices, not harmonized singing."""
     tracks, fmt = [], None
     for path in paths:
         with wave.open(str(path), 'rb') as wav:

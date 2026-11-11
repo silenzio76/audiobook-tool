@@ -6,12 +6,13 @@ import unittest
 import audiolibro as audio
 from lingue_audio import lexicon
 from profili_vocali import load, validate
-from version_info import __version__
+from version_info import __version__, __build__, __build_version__
 
 
 class StandaloneTests(unittest.TestCase):
     def test_authoritative_version(self):
         self.assertEqual(__version__, Path(__file__).with_name('VERSION').read_text(encoding='ascii').strip())
+        self.assertEqual(__build_version__, f'{__version__}+build.{__build__}')
 
     def test_neutral_document_roundtrip_preserves_source(self):
         with tempfile.TemporaryDirectory() as directory:

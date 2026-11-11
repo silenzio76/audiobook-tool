@@ -1,4 +1,4 @@
-"""Audiolibro locale per revisione: Python standard + voci Windows OneCore."""
+"""Local audiobook review using standard Python and Windows OneCore voices."""
 import argparse
 import hashlib
 import io
@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import tempfile
 import wave
-from version_info import __version__
+from version_info import __version__, __build_version__
 from profili_vocali import load as load_profiles, resolve as resolve_voice, TONES
 from qwen_backend import reference as qwen_reference
 from numeri_italiani import VERSION as SPEECH_VERSION, spoken_it
@@ -226,7 +226,7 @@ def run_backend(command, work, engine, cancel_event=None):
             while process.poll() is None:
                 if cancel_event.wait(.1):
                     if os.name == 'nt':
-                        # Solo l'albero del processo appena avviato dal lettore.
+                        # Only the process tree just started by the reader.
                         subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'],
                                        capture_output=True, creationflags=options['creationflags'])
                     else:
@@ -826,7 +826,7 @@ if __name__ == '__main__':
         return path
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--version', action='version', version=__version__)
+    parser.add_argument('--version', action='version', version=__build_version__)
     sub = parser.add_subparsers(dest='action', required=True)
     audit = sub.add_parser('analizza', help='Analizza WAV senza modificarli: volume, pause e indice')
     audit.add_argument('directory', type=Path)

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added the persistent automatic build/commit workflow. Each verified code change
+  increments `BUILD`; the CLI and source manifest expose `VERSION+build.N`.
+- Translated project-owned Python comments and docstrings into English, preserving
+  localized strings, serialized values and narrative/linguistic fixtures.
+
 ## 0.1.0 — 2026-11-11
 
 Initial public source release of the Windows-oriented audiobook manuscript review

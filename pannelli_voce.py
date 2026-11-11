@@ -1,4 +1,4 @@
-"""Pannelli Qt per toni, genere e pronunce."""
+"""Qt panels for delivery tones, gender and pronunciation."""
 from ui_language import display_tone, tr
 from PySide6 import QtCore, QtWidgets as Qt
 

@@ -1,4 +1,4 @@
-"""Worker di analisi, sintesi e lettura senza accesso ai widget."""
+"""Analysis, synthesis and reading worker without widget access."""
 from ui_language import tr
 import queue
 import threading
@@ -25,10 +25,10 @@ class AudioPipeline:
         self.ready = queue.Queue(maxsize=buffer_size)
         self.analyze = analyze
         self.batch_size = batch_size or max(1, len(self.indices))
-        self.work = queue.Queue()  # Solo indici, mai audio.
+        self.work = queue.Queue()  # Indices only, never audio.
         self.startup_items = startup_items
         self.preload_all = preload_all
-        self.prepared = []  # Soli percorsi su disco, non campioni audio in RAM.
+        self.prepared = []  # Disk paths only, not audio samples in RAM.
         self.stop_event = threading.Event()
         self.producer_done = threading.Event()
         self._error = None

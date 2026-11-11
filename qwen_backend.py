@@ -1,4 +1,4 @@
-"""Motore Qwen locale, eseguito esclusivamente nell'ambiente Python isolato."""
+"""Local Qwen engine run exclusively in its isolated Python environment."""
 import argparse
 import hashlib
 import json
@@ -259,7 +259,7 @@ def synthesize(job_file):
             result = np.concatenate(chunks)
             sr=22050
         tone = job.get('tone', 'Neutro')
-        # I toni sono modulazioni tecniche esplicite; non cambiano il timbro di base.
+        # Delivery tones are explicit technical modulations, preserving base timbre.
         speed,gain=delivery(tone)
         speed = max(.75, min(1.25, speed * job.get('character_speed', 1.0)))
         speed *= job.get('reading_speed', 1.0)
@@ -284,7 +284,7 @@ def synthesize(job_file):
 
 
 def split_text(text, limit=350):
-    """Tagli brevi per contenere memoria e rischio di troncamento generativo."""
+    """Use short chunks to bound memory and generative truncation risk."""
     text = text.strip()
     while len(text) > limit:
         choices = list(re.finditer(r'\s+', text[:limit + 1]))
@@ -321,7 +321,7 @@ def activate(names):
             profile['description'] = info['description']
     if 'Narratore' in names:
         for name in ('Da assegnare', 'Altro'):
-            # Ripiego tecnico esplicito, non attribuzione automatica di battute.
+            # Explicit technical fallback, not automatic dialogue attribution.
             data['characters'][name].update(engine='qwen3', reference=data['characters']['Narratore']['reference'])
     validate(data)
     save(CONFIG, data)
@@ -329,7 +329,7 @@ def activate(names):
 
 
 def main():
-    # Certificati nativi Windows mantenendo la verifica TLS attiva.
+    # Use native Windows certificates while keeping TLS verification enabled.
     try:
         import truststore
         truststore.inject_into_ssl()

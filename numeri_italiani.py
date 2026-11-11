@@ -1,4 +1,4 @@
-"""Resa vocale italiana delle cifre: non modifica il testo narrativo salvato."""
+"""Italian spoken numbers without modifying saved manuscript text."""
 from datetime import date
 import re
 
@@ -29,7 +29,7 @@ def integer_it(number):
     else:
         thousands, rest = divmod(number, 1000)
         base = 'mille' if thousands == 1 else integer_it(thousands) + 'mila'
-        # Un composto interno non conserva l'accento finale di ventitré.
+        # An internal compound does not retain the final stress mark of ventitré.
         base = base.replace('tré', 'tre')
         result = base + (integer_it(rest) if rest else '')
     if number > 3 and result.endswith('tre'):
@@ -51,8 +51,8 @@ def spoken_it(text):
 
     def number(match):
         token = match.group()
-        # Nel corpus verificato ci sono anni e giorni interi. Decimali, codici,
-        # zeri iniziali e identificativi alfanumerici non vengono reinterpretati.
+        # The verified corpus contains whole-number years and days. Decimals,
+        # codes, leading zeros and alphanumeric identifiers are not reinterpreted.
         if len(token) > 6 or (len(token) > 1 and token.startswith('0')):
             return token
         return integer_it(int(token))

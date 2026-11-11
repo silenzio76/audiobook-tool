@@ -49,7 +49,7 @@ def convert(source, output, *, cancel_event=None):
     ffmpeg, ffprobe = conversion_tools()
     original_hash = digest(source)
     output.parent.mkdir(parents=True, exist_ok=True)
-    # Staging nello stesso filesystem; il file finale appare solo dopo i controlli.
+    # Stage on the same filesystem; publish the final file only after validation.
     with tempfile.TemporaryDirectory(prefix='conversione-', dir=output.parent) as work:
         def execute(command):
             if cancel_event is None:

@@ -1,4 +1,4 @@
-"""Finestra Qt per la revisione e l'ascolto del manoscritto."""
+"""Qt window for manuscript review and playback."""
 from ui_language import current_language, display_tone, set_language, tr
 import json
 import os
@@ -698,7 +698,7 @@ class Editor(Qt.QMainWindow):
         if cursor.hasSelection():
             self.status.setText(tr('Posiziona il cursore tra due parole senza selezionare testo.'))
             return
-        # Qt conta unità UTF-16, mentre il piano usa indici Python.
+        # Qt counts UTF-16 units, while the plan uses Python string indices.
         text = self.content.toPlainText()
         try:
             offset = len(text.encode('utf-16-le')[:cursor.position() * 2].decode('utf-16-le'))

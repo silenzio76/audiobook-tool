@@ -49,6 +49,12 @@ remote verification are recorded separately in the local release checkpoint.
 
 ## 2. English project materials and repeatable installation
 
+Current checkpoint: project-owned Python comments/docstrings have been translated
+in a separate pass. Executable ASTs for translation-only modules were compared
+with the originals, excluding documentation strings; localized strings and
+serialized values are retained. BUILD and automatic verified commits are now
+part of the repository workflow. The installation/dependency pass follows.
+
 - Use English for all project-owned code comments, docstrings and supporting files, including the README, roadmap, changelog, installation and troubleshooting guides, configuration comments, example documentation and release notes. Translate existing material in a dedicated pass and check that code behavior and serialized values are preserved. Manuscript excerpts, linguistic fixtures and localized user-facing text retain their intended languages.
 - Inventory supported Python versions and separate core dependencies from optional engines, external executables, model weights and voice resources. Declare and pin the versions needed for supported builds, with a documented install and update path. Check availability, compatible versions and prerequisites before generation. Report what is missing and how to fix it.
 - Verify on clean Windows with a second operator. They should be able to install the core, run a short sample and export audio using only the English instructions. Check each supported optional backend separately, including what happens when it is absent.

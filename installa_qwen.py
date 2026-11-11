@@ -1,4 +1,4 @@
-"""Installazione riproducibile e isolata: nessuna modifica al Python globale."""
+"""Reproducible isolated installation without modifying global Python."""
 import os
 from pathlib import Path
 import subprocess
