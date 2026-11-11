@@ -1,0 +1,2 @@
+# Preserve reviewed bytes across checkouts for reproducible source archives.
+* -text

@@ -1,0 +1,24 @@
+# Local manuscripts, plans, configuration and provenance remain outside Git.
+Libri/
+voci_qwen/
+wav/
+.runtime/
+.audiolibro/
+.ascolto/
+repository_candidates/
+*.json
+.env
+.env.*
+*.pem
+*.key
+# Generated media, caches, backups and editor staging files.
+*.wav
+*.mp3
+*.mp4
+*.flac
+*.zip
+*.bak
+*.tmp
+__pycache__/
+*.py[cod]
+.venv/
