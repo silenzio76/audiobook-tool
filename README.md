@@ -116,6 +116,24 @@ starting a synthesis backend. The optional Qwen lock is a measured Windows/Pytho
 testing by a second operator remains open. A source smoke test does not certify
 installation, desktop playback or pronunciation on a clean machine.
 
+## Recoverable audio delivery
+
+WAV/MP4 synthesis and assembled-reading exports validate their audio and index
+before publication. Per-file replacement is atomic; a journal records the old
+pair and its hash-checked backups before either destination changes. Failure or
+cancellation rolls back an incomplete pair. An interrupted process is recovered
+before replay, cache reuse, assembly or a subsequent export. If both new files
+were completed, recovery keeps that validated pair; otherwise it restores the old
+files (or removes an incomplete first delivery). Missing/altered backups stop
+recovery and preserve the journal for inspection. Related staging files are
+removed after recovery only when their names and hashes match the journal.
+
+This is recoverable two-file publication, not a filesystem-wide atomic operation.
+Unrelated external readers may see the short interval between replacements. The
+software's recovery/validation paths reject an unfinished delivery. No guarantee
+is made about power-loss durability beyond the filesystem's guarantees. Standalone
+format conversion without an index is outside this paired-publication change.
+
 ## Automatic external library maintenance
 
 The desktop entry point checks its isolated library profiles at most once per

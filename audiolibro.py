@@ -264,6 +264,8 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
     if selected is None and pending(plan) and not allow_unassigned:
         raise ValueError(f"Restano {pending(plan)} battute da assegnare. Completarle oppure usare --allow-unassigned per una bozza narrata.")
     output = Path(output).resolve()
+    from audio_publication import recover_audio
+    recover_audio(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     indices = range(len(plan['segments'])) if selected is None else (
         (selected,) if isinstance(selected, int) else selected)
@@ -432,17 +434,14 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
         if reference_hashes(profiles) != references:
             raise ValueError('Campioni vocali cambiati durante la sintesi: rigenerare l’audio.')
         if output.suffix.lower() == '.mp4':
-            from converti_audio import convert, digest
-            convert(combined, output, cancel_event=cancel_event)
-            audio_hash = digest(output)
-            index_path = output.with_suffix('.mp4.indice.json')
+            from converti_audio import convert
+            published_audio = work / 'complete.mp4'
+            convert(combined, published_audio, cancel_event=cancel_event)
         else:
-            audio_bytes = combined.read_bytes()
-            atomic(output, audio_bytes)
-            audio_hash = hashlib.sha256(audio_bytes).hexdigest()
-            index_path = output.with_suffix('.indice.json')
-        save(index_path, {'source_sha256': plan['sha256'],
-             'plan_sha256': plan_hash, 'audio_sha256': audio_hash,
+            published_audio = combined
+        from audio_publication import publish_audio
+        publish_audio(published_audio, output, {'source_sha256': plan['sha256'],
+             'plan_sha256': plan_hash,
              'profiles_sha256': profiles_hash, 'profiles': profiles,
              'voice_references': references, 'backends': backend_reports, 'voice_mode': voice_mode, 'speed_level': speed_level,
              'voice_eq': {'version': EQ_VERSION, 'gains_db': list(voice_eq)},
@@ -455,7 +454,7 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
              'spoken_forms': [{'id': s['id'], 'source_text': s['text'], 'spoken_text': ''.join(p['text'] for p in parts_by_id[s['id']])}
                               for s in segments if ''.join(p['text'] for p in parts_by_id[s['id']]) != s['text']],
              'unassigned': sum(s['role'] == 'Da assegnare' for s in segments),
-             'duration': elapsed, 'segments': timings})
+             'duration': elapsed, 'segments': timings}, cancel_event=cancel_event)
     return output
 
 
@@ -498,6 +497,8 @@ def raw_preview(path, index, cancel_event=None, *, voice_mode=NARRATOR_MODE, spe
     path = Path(path).resolve()
     plan = read_plan(path)
     target = preview_target(path, index, voice_mode, speed_level, voice_design)
+    from audio_publication import recover_audio
+    recover_audio(target)
     metadata = target.with_suffix('.indice.json')
     if not regenerate and target.exists() and metadata.exists():
         try:
@@ -616,6 +617,8 @@ def write_reading(staged, paths, stop_event, limit_ms):
         for path in paths:
             if stop_event.is_set():
                 return
+            from audio_publication import recover_audio
+            recover_audio(path)
             with wave.open(str(path), 'rb') as source:
                 current = (source.getnchannels(), source.getsampwidth(), source.getframerate())
                 if fmt is None:
@@ -685,8 +688,11 @@ def write_junction(output, paths, stop_event):
 
 def save_reading(output, paths, stop_event, limit_ms=None):
     """Stream a reading to a validated temporary master before publishing."""
-    from converti_audio import convert, digest
+    from converti_audio import convert
+    from audio_publication import publish_audio
     output = Path(output)
+    from audio_publication import recover_audio
+    recover_audio(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=output.parent, suffix='.wav', delete=False) as file:
         staged = Path(file.name)
@@ -695,21 +701,13 @@ def save_reading(output, paths, stop_event, limit_ms=None):
         if result is None or stop_event.is_set():
             return
         timings, duration = result
+        metadata = {'duration': duration, 'segments': timings, 'mounting_version': MOUNT_VERSION}
         if output.suffix.lower() == '.mp4':
-            convert(staged, output, cancel_event=stop_event)
-            index = output.with_suffix('.mp4.indice.json')
-        else:
-            if output.exists():
-                backup = output.with_name(output.name + '.' + digest(output)[:12] + '.bak')
-                if not backup.exists():
-                    shutil.copyfile(output, backup)
-            if stop_event.is_set():
-                return
-            os.replace(staged, output)
-            index = output.with_suffix('.indice.json')
-        save(index, {'audio_sha256': digest(output), 'duration': duration, 'segments': timings,
-                     'mounting_version': MOUNT_VERSION})
-        return output
+            with tempfile.TemporaryDirectory(dir=output.parent) as directory:
+                converted = Path(directory) / 'complete.mp4'
+                convert(staged, converted, cancel_event=stop_event)
+                return publish_audio(converted, output, metadata, stop_event)
+        return publish_audio(staged, output, metadata, stop_event)
     finally:
         staged.unlink(missing_ok=True)
 
@@ -719,6 +717,8 @@ def play_audio(path, *, stop_event, events, limit_ms=None):
     if stop_event.is_set():
         return
     path = Path(path).resolve()
+    from audio_publication import recover_audio
+    recover_audio(path)
     if limit_ms is not None:
         with wave.open(str(path), 'rb') as wav:
             needs_trim = wav.getnframes() * 1000 > limit_ms * wav.getframerate()

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added recoverable publication for matching WAV/MP4 audio and indexes, with
+  complete staging validation, preserved backups, cancellation rollback and
+  journal-based recovery after interruption. Playback/cache/assembly paths recover
+  unfinished deliveries before use. Damaged recovery material is not discarded.
+
 - Added automatic adoption of verified library lockfiles in separate runtime
   slots, with native/package checks, retained previous environments and rollback.
 - Added weekly grouped dependency patch proposals; CUDA stack updates remain an

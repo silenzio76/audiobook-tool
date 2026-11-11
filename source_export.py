@@ -20,6 +20,7 @@ EXPORT_FILES = (
     'dev_commit.py', 'test_dev_commit.py',
     'environment_check.py', 'install_environment.py', 'test_environment.py',
     'library_updates.py', 'test_library_updates.py', '.github/dependabot.yml',
+    'audio_publication.py', 'test_audio_publication.py',
     'INSTALLATION.md', 'requirements-qwen.txt', 'requirements-qwen-torch.txt', 'example.md',
     'audiolibro.py', 'analisi_audio.py', 'converti_audio.py',
     'editor_audiolibro.py', 'equalizzatore_voci.py', 'gestione_voci.py',

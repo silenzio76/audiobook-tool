@@ -76,6 +76,14 @@ acceptance test; milestone 2 remains open for that observed human workflow.
 
 ## 3. Error recovery and resource management
 
+Audio delivery checkpoint: synthesis and assembled-reading exports now validate
+both files and use hash-checked backups plus a recovery journal. Failure between
+audio/index replacement restores the previous pair; interrupted runs are recovered
+before playback, cache reuse, assembly or republishing. Crash-injection tests
+cover incomplete and completed transactions. This checkpoint covers WAV/MP4 pair
+publication, not the entire resource-management milestone. Broader worker/cache
+retention and the second-operator interruption workflow remain to audit.
+
 Library maintenance checkpoint: startup adoption of approved library lockfiles
 uses separately validated venv slots and atomic pointer activation. Failed
 candidates preserve the previous runtime. Weekly grouped patch proposals are
