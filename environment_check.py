@@ -122,7 +122,8 @@ def inspect_environment(profile='core', root=HERE, *, runtime_python=None, deep=
     root = Path(root).resolve()
     if profile != 'qwen':
         return check_current(profile, root, deep=deep, packages_only=packages_only, tokens=tokens)
-    python = Path(runtime_python or root / '.runtime' / 'qwen' / 'Scripts' / 'python.exe')
+    from library_updates import runtime_python as selected_runtime
+    python = Path(runtime_python) if runtime_python else selected_runtime('qwen', root)
     if not python.is_file():
         return {'profile': 'qwen', 'scope': 'prerequisites', 'ok': False, 'checks': [{
             'name': 'qwen-python', 'ok': False, 'detail': 'Isolated Qwen interpreter is missing.',

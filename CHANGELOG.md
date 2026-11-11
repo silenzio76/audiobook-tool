@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added automatic adoption of verified library lockfiles in separate runtime
+  slots, with native/package checks, retained previous environments and rollback.
+- Added weekly grouped dependency patch proposals; CUDA stack updates remain an
+  explicitly verified operation. No unreviewed source merge is automated.
+
 - Added isolated core/editor/Qwen installation plans, exact Qt pins, the measured
   Qwen dependency lock and an English installation/troubleshooting guide.
 - Added offline prerequisite reports and synthesis preflight checks. Missing

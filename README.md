@@ -116,6 +116,30 @@ starting a synthesis backend. The optional Qwen lock is a measured Windows/Pytho
 testing by a second operator remains open. A source smoke test does not certify
 installation, desktop playback or pronunciation on a clean machine.
 
+## Automatic external library maintenance
+
+The desktop entry point checks its isolated library profiles at most once per
+day, and when project lockfiles change. It automatically adopts the exact
+project-verified versions in a separate venv, runs package and native checks,
+then atomically switches a runtime pointer. Existing environments are retained;
+libraries loaded by an editor session are never overwritten. The editor relaunches
+with its selected isolated Python before importing Qt. Qwen uses its selected
+runtime on the next synthesis process. No models or voices are downloaded.
+
+Weekly Dependabot pull requests propose grouped patch updates to the source
+lockfiles. These proposals require compatibility review and the build/commit
+workflow before merge; they are not silently merged. Qt moves as one group.
+Torch/torchaudio/CUDA changes require a separately verified engine update.
+Automatic adoption means applying approved lockfiles, not installing arbitrary
+latest versions from the internet. This preserves reproducible installations.
+
+Use `python library_updates.py --profile editor` (or `qwen`) to force a check.
+Use `--rollback` to reactivate an existing previous runtime and pause automatic
+adoption until an explicit forced update. Set `AUDIOBOOK_AUTO_UPDATE=0` to disable
+startup checks. Initial provisioning can take time and requires package network
+access. Failed candidate environments remain under `.runtime/library_updates`
+for diagnosis and never replace a working runtime. See INSTALLATION.md.
+
 ## Development builds and automatic commits
 
 `VERSION` identifies releases; `BUILD` counts verified development code changes.

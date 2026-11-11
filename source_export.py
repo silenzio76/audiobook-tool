@@ -19,6 +19,7 @@ EXPORT_FILES = (
     'source_export.py', 'version_info.py', 'BUILD', 'AGENTS.md',
     'dev_commit.py', 'test_dev_commit.py',
     'environment_check.py', 'install_environment.py', 'test_environment.py',
+    'library_updates.py', 'test_library_updates.py', '.github/dependabot.yml',
     'INSTALLATION.md', 'requirements-qwen.txt', 'requirements-qwen-torch.txt', 'example.md',
     'audiolibro.py', 'analisi_audio.py', 'converti_audio.py',
     'editor_audiolibro.py', 'equalizzatore_voci.py', 'gestione_voci.py',
@@ -52,7 +53,8 @@ def collect(source=HERE):
     payloads = {}
     for name in EXPORT_FILES:
         path = source / name
-        if path.is_symlink() or path.resolve().parent != source:
+        if path.is_symlink() or not path.resolve().is_relative_to(source) or any(
+                parent.is_symlink() for parent in path.parents if parent != source and parent.is_relative_to(source)):
             raise ValueError('Linked or external export input: ' + name)
         if not path.is_file():
             raise ValueError('Missing approved export input: ' + name)

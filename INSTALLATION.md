@@ -125,6 +125,29 @@ generation requires the needed model to be cached in that location.
 
 ## Updates, recovery and offline use
 
+The desktop automatically checks isolated library profiles once per day and on
+lockfile changes. Approved dependency versions are installed into a new runtime
+slot, checked with pip and native imports, and activated using one atomic pointer
+replacement. The previous runtime remains available; nothing is renamed while
+its interpreter or Qt DLLs are in use. Candidate installs require binary wheels;
+if a pinned optional package has no wheel, activation is refused and the old
+runtime is retained. Use the regular optional installer for that platform, or
+review a new dependency baseline. The updater never downloads models or voices.
+
+```text
+python library_updates.py --profile editor
+python library_updates.py --profile qwen
+python library_updates.py --profile editor --rollback
+```
+
+Rollback is available when an earlier isolated runtime exists. It pauses startup
+adoption until the explicit update command is run again. Source lockfiles are not
+changed by rollback; if reverting to a different dependency baseline, use its
+matching source commit. Set `AUDIOBOOK_AUTO_UPDATE=0` to disable startup updates.
+Source-library patch proposals are generated weekly by Dependabot and require
+review/verification before merge. Major/minor and CUDA-stack changes are excluded
+from unattended dependency proposals. No automatic source merge is configured.
+
 Pull a completed source commit, read CHANGELOG.md, inspect any changed lockfiles
 and rerun the installer with the same profile/interpreter. The exact application
 versions are reapplied; source upgrades are not silent package upgrades. Preserve

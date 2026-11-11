@@ -1,0 +1,33 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      qt-patches:
+        patterns:
+          - PySide6
+          - PySide6_Addons
+          - PySide6_Essentials
+          - shiboken6
+      qwen-python-patches:
+        patterns:
+          - '*'
+        exclude-patterns:
+          - PySide6
+          - PySide6_Addons
+          - PySide6_Essentials
+          - shiboken6
+          - torch
+          - torchaudio
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+      # CUDA/ABI changes require a separately verified engine update.
+      - dependency-name: torch
+      - dependency-name: torchaudio

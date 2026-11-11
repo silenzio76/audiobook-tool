@@ -16,6 +16,7 @@ class BuildPolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for name in source_export.EXPORT_FILES:
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source_export.HERE / name, root / name)
 
             def git(*args):

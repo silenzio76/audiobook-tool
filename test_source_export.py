@@ -18,6 +18,7 @@ class SourceExportTests(unittest.TestCase):
         source = Path(directory) / 'source'
         source.mkdir()
         for name in export.EXPORT_FILES:
+            (source / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(export.HERE / name, source / name)
         return source
 

@@ -363,7 +363,8 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
                 command = ['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
                            str(HERE / 'voce_windows.ps1'), '-Job', str(job)]
             else:
-                python = HERE / '.runtime' / 'qwen' / 'Scripts' / 'python.exe'
+                from library_updates import runtime_python
+                python = runtime_python('qwen', HERE)
                 if not python.exists():
                     raise RuntimeError('Qwen non installato: eseguire installa_qwen.py')
                 command = [str(python), '-X', 'utf8', str(HERE / 'qwen_backend.py'), 'sintesi', str(job)]
@@ -808,6 +809,14 @@ def reading_plan(source):
 
 def editor(path=None, auto_read=False):
     import sys
+    from library_updates import automatic_updates, runtime_python
+    automatic_updates(HERE)
+    python = runtime_python('editor', HERE)
+    if python.exists() and python.resolve() != Path(sys.executable).resolve():
+        command = [str(python), '-X', 'utf8', str(HERE / 'audiolibro.py'), 'leggi' if auto_read else 'editor']
+        if path is not None:
+            command.append(str(path))
+        raise SystemExit(subprocess.run(command).returncode)
     from environment_check import inspect_environment
     report = inspect_environment('editor', HERE)
     if not report['ok']:

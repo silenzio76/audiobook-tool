@@ -76,6 +76,11 @@ acceptance test; milestone 2 remains open for that observed human workflow.
 
 ## 3. Error recovery and resource management
 
+Library maintenance checkpoint: startup adoption of approved library lockfiles
+uses separately validated venv slots and atomic pointer activation. Failed
+candidates preserve the previous runtime. Weekly grouped patch proposals are
+configured in Dependabot, without unattended merge or model/voice downloads.
+
 - Preserve the source and the last valid output on cancellation, backend failure, missing resources or a full disk. Report the failed stage, affected segment and next action. Ensure that the published audio and its index belong to the same run. Resume from validated work when safe and restart the affected stage otherwise.
 - Manage child processes, worker lifetimes, temporary files, cache, model storage and memory explicitly. Bound preloading, release resources after cancellation and offer safe cleanup of generated files. Reuse cached segments only when their source, voice, pronunciation and synthesis settings still match.
 - Validate with a short multilingual fixture, deliberate interruption, restart and a pronunciation edit. Confirm that no stale audio is reused, no worker is left running and a partial export cannot replace a valid one.
