@@ -67,6 +67,7 @@ class Editor(Qt.QMainWindow):
         self.closing = self.stopped = self.exporting = False
         self.language_switch_requested = False
         self.resume_after_language = None
+        self.resume_request = None
         self.export_requested = False
         self.generate_only = False
         self.junction_work = None
@@ -340,7 +341,7 @@ class Editor(Qt.QMainWindow):
         body.addWidget(self.content, 1)
         actions = Qt.QHBoxLayout()
         body.addLayout(actions)
-        self.segment_play = self.button(actions, tr('Ascolta'), lambda: self.start(quick=True), icon.SP_MediaPlay, accent='green')
+        self.segment_play = self.button(actions, tr('Ascolta'), self.toggle_segment_playback, icon.SP_MediaPlay, accent='green')
         self.segment_generate = self.button(actions, tr('Genera'), lambda: self.start(quick=True, generate_only=True),
                                             'generate', accent='blue')
         self.segment_regenerate = self.button(actions, tr('Rigenera'), lambda: self.start(
@@ -389,7 +390,7 @@ class Editor(Qt.QMainWindow):
         transport_layout.addWidget(self.narrator_label)
         controls = Qt.QHBoxLayout()
         transport_layout.addLayout(controls)
-        self.pause_button = self.button(controls, tr('Pausa'), lambda: self.send_transport('toggle'),
+        self.pause_button = self.button(controls, tr('Pausa'), self.toggle_segment_playback,
                                         icon.SP_MediaPause, edit=False, accent='amber')
         self.stop_button = self.button(controls, tr('Ferma lettura'), self.stop, icon.SP_MediaStop,
                                        edit=False, accent='red')
@@ -512,6 +513,7 @@ class Editor(Qt.QMainWindow):
         path = self.audio.reading_plan(source)
         plan = self.audio.read_plan(path)
         self.path, self.plan = path, plan
+        self.resume_request = None
         self.document_language.setCurrentIndex(self.document_language.findData(plan.get('language', 'auto')))
         self.last_audio = None
         self.preparation_eta.clear()
@@ -562,11 +564,12 @@ class Editor(Qt.QMainWindow):
         self.status.setText(tr('Lingua del documento salvata.'))
 
     def rebuild_segments(self, index):
-        self.listing.clear()
-        for segment in self.plan['segments']:
-            item = Qt.QListWidgetItem()
-            self.format_item(item, segment)
-            self.listing.addItem(item)
+        with QtCore.QSignalBlocker(self.listing):
+            self.listing.clear()
+            for segment in self.plan['segments']:
+                item = Qt.QListWidgetItem()
+                self.format_item(item, segment)
+                self.listing.addItem(item)
         self.select_segment(index)
         self.refresh_assignments()
 
@@ -617,6 +620,11 @@ class Editor(Qt.QMainWindow):
     def toggle_segment_playback(self):
         if self.busy:
             self.send_transport('toggle')
+        elif self.resume_request is not None:
+            request = self.resume_request
+            self.select_segment(request['index'])
+            self.reading_duration.setText(request['duration'])
+            self.start(quick=True, continuous=request['continuous'])
         else:
             self.start(quick=True)
 
@@ -998,6 +1006,7 @@ class Editor(Qt.QMainWindow):
             return
         self.active_request = (index, export, continuous, from_start, self.reading_duration.text(),
                                quick, generate_only, regenerate, junction)
+        self.resume_request = None
         segments = self.plan['segments']
         source_indices = tuple(indices)
         speed = 1 + .10 * self.reading_speed.currentData()
@@ -1280,13 +1289,17 @@ class Editor(Qt.QMainWindow):
         stopping = self.busy and self.pipeline.stop_event.is_set()
         active = self.busy and self.transport is not None and not stopping
         paused = active and self.transport['paused']
+        resumable = not self.busy and self.resume_request is not None
         icon = Qt.QStyle.StandardPixmap
-        label = tr('Riprendi') if paused else tr('Pausa')
+        label = tr('Riprendi') if paused or resumable else tr('Pausa')
+        self.pause_button.setText(label)
         self.pause_button.setToolTip(label)
         self.pause_button.setAccessibleName(label)
-        self.pause_button.setIcon(self.command_icon(icon.SP_MediaPlay, 'green') if paused
+        self.pause_button.setIcon(self.command_icon(icon.SP_MediaPlay, 'green') if paused or resumable
                                   else self.command_icon(icon.SP_MediaPause, 'amber'))
-        for control in (self.pause_button, self.back_button, self.forward_button):
+        self.pause_button.setEnabled(active or resumable)
+        self.segment_play.setEnabled(active or (not self.busy and self.path is not None))
+        for control in (self.back_button, self.forward_button):
             control.setEnabled(active)
         self.stop_button.setEnabled((self.busy or self.auto_timer.isActive()) and not stopping)
         self.open_markdown_button.setEnabled(not self.busy)
@@ -1301,6 +1314,10 @@ class Editor(Qt.QMainWindow):
         self.stopped = True
         self.auto_timer.stop()
         if self.busy:
+            if not self.exporting and not self.generate_only and self.junction_work is None:
+                self.resume_request = dict(index=self.listing.currentRow(),
+                                           continuous=self.active_request[2],
+                                           duration=self.reading_duration.text())
             self.pipeline.stop()
             self.status.setText(tr('Arresto di vocalizzazione e lettura in corso…'))
         else:

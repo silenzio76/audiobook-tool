@@ -28,7 +28,7 @@ EXPORT_FILES = (
     'numeri_italiani.py', 'pannelli_voce.py', 'pipeline_audio.py',
     'profili_vocali.py', 'qwen_backend.py', 'sintesi_lingue.py',
     'ui_language.py', 'voce_windows.ps1', 'requirements-editor.txt',
-    'test_source_export.py', 'test_standalone.py',
+    'test_source_export.py', 'test_standalone.py', 'test_ui_transport.py',
 )
 MANIFEST = 'SOURCE_MANIFEST.json'
 BUILD_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,79}', re.ASCII)
