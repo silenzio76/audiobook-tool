@@ -1,6 +1,9 @@
 """Original neutral fixtures for validating an isolated source candidate."""
 from pathlib import Path
 import json
+import queue
+import threading
+import wave
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -12,6 +15,32 @@ from version_info import __version__, __build__, __build_version__
 
 
 class StandaloneTests(unittest.TestCase):
+    def test_timed_playback_uses_extracted_player_and_preserves_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'sample.wav'
+            with wave.open(str(path), 'wb') as stream:
+                stream.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
+                stream.writeframes(b'\x00\x00' * 8000)
+            original = path.read_bytes()
+
+            def inspect_clip(clip, stop, events):
+                with wave.open(str(clip), 'rb') as stream:
+                    self.assertEqual(stream.getnframes(), 2000)
+
+            with patch('audio_playback._play_wav', side_effect=inspect_clip) as player:
+                audio.play_audio(path, stop_event=threading.Event(), events=queue.Queue(), limit_ms=250)
+            player.assert_called_once()
+            self.assertFalse(player.call_args.args[0].exists())
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_core_entry_points_reexport_extracted_services(self):
+        import audio_playback
+        import project_storage
+        for name in ('atomic', 'save'):
+            self.assertIs(getattr(audio, name), getattr(project_storage, name))
+        for name in ('write_reading', 'write_junction', 'save_reading', 'play_audio', '_play_wav'):
+            self.assertIs(getattr(audio, name), getattr(audio_playback, name))
+
     def test_recorded_narrator_pitch_reaches_backend_in_both_modes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

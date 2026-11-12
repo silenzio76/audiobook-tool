@@ -24,6 +24,8 @@ EXPORT_FILES = (
     'INSTALLATION.md', 'requirements-qwen.txt', 'requirements-qwen-torch.txt', 'example.md',
     'audiolibro.py', 'analisi_audio.py', 'converti_audio.py',
     'editor_audiolibro.py', 'equalizzatore_voci.py', 'gestione_voci.py',
+    'editor_view.py', 'editor_preferences.py', 'editor_document.py', 'editor_playback.py',
+    'project_storage.py', 'audio_playback.py',
     'installa_qwen.py', 'lingue_audio.py', 'montaggio_audio.py',
     'numeri_italiani.py', 'pannelli_voce.py', 'pipeline_audio.py',
     'profili_vocali.py', 'qwen_backend.py', 'sintesi_lingue.py',

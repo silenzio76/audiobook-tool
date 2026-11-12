@@ -22,6 +22,8 @@ from profili_vocali import tone_names, tone_label
 from lingue_audio import (DOCUMENT_LANGUAGES, LANGUAGES, QWEN, VERSION as LANGUAGE_VERSION,
                           lexicon, segment_language, speech_parts)
 from montaggio_audio import VERSION as MOUNT_VERSION, flag_level_jump, mount_pcm
+from project_storage import atomic, save
+from audio_playback import write_reading, write_junction, save_reading, play_audio, _play_wav
 
 
 def language_policy():
@@ -35,7 +37,9 @@ def language_policy():
     return LANGUAGE_VERSION + ':' + hashlib.sha256(json.dumps([entries,hashes],ensure_ascii=False,sort_keys=True).encode()).hexdigest()
 
 HERE = Path(__file__).resolve().parent
+
 ROOT = HERE.parent
+
 ROLES = {
     'Narratore': ('CosimoM', -1, 0),
     'Da assegnare': ('CosimoM', -1, 0),
@@ -50,31 +54,6 @@ ROLES = {
     'Miriam': ('ElsaM', -1, 0),
     'Altro': ('ElsaM', 0, 0),
 }
-
-
-def atomic(path, data):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False, suffix='.tmp') as f:
-        staged = Path(f.name)
-        f.write(data)
-    try:
-        assert staged.read_bytes() == data
-        if path.exists():
-            previous = path.read_bytes()
-            copy = path.with_name(path.name + '.' + hashlib.sha256(previous).hexdigest()[:12] + '.bak')
-            if not copy.exists():
-                copy.write_bytes(previous)
-        os.replace(staged, path)
-    finally:
-        staged.unlink(missing_ok=True)
-
-
-def save(path, data):
-    payload = json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
-    assert json.loads(payload) == data
-    atomic(path, payload)
-
 
 def prepare(source, output):
     if Path(output).exists():
@@ -116,10 +95,9 @@ def prepare(source, output):
     save(output, plan)
     return plan
 
-
 DEFAULT_PAUSE_MS = 600
-MAX_PAUSE_MS = 3000
 
+MAX_PAUSE_MS = 3000
 
 def segment_pause_ms(segment, following=None):
     if 'pause_ms' in segment:
@@ -139,10 +117,8 @@ def segment_pause_ms(segment, following=None):
         return 320
     return 150
 
-
 def segment_speech_parts(plan, segment):
     return speech_parts(segment.get('spoken_text', segment['text']), segment_language(plan, segment))
-
 
 def segment_audio_key(plan, segment, *, legacy=False):
     fields = {key: segment.get(key) for key in ('id', 'text', 'spoken_text', 'role', 'tone')}
@@ -151,21 +127,20 @@ def segment_audio_key(plan, segment, *, legacy=False):
         fields['pause_ms'] = segment_pause_ms(segment)
     return hashlib.sha256(json.dumps(fields, sort_keys=True).encode()).hexdigest()
 
-
 def plan_pause_ms(plan, segment):
     index = segment['id']
     following = plan['segments'][index] if index < len(plan['segments']) else None
     return segment_pause_ms(segment, following)
-
 
 def legacy_preview_pause(plan, segment, audio_key):
     for candidate in (segment, {key: value for key, value in segment.items() if key != 'pause_ms'}):
         if audio_key == segment_audio_key(plan, candidate, legacy=True):
             return segment_pause_ms(candidate)
     return None
-NARRATOR_PITCH_ST = 0.0
-SPEED_LEVELS = (0, 1, 2)
 
+NARRATOR_PITCH_ST = 0.0
+
+SPEED_LEVELS = (0, 1, 2)
 
 def read_plan(path):
     plan = json.loads(Path(path).read_text(encoding='utf-8'))
@@ -195,10 +170,8 @@ def read_plan(path):
             raise ValueError('Pausa non valida nel piano.')
     return plan
 
-
 def pending(plan):
     return sum(s['role'] == 'Da assegnare' for s in plan['segments'])
-
 
 def reference_hashes(profiles):
     result = {}
@@ -209,7 +182,6 @@ def reference_hashes(profiles):
             result[str(path)] = {'metadata': hashlib.sha256(path.read_bytes()).hexdigest(),
                                  'audio': data['audio_sha256']}
     return result
-
 
 def run_backend(command, work, engine, cancel_event=None):
     options = dict(text=True, encoding='utf-8', errors='replace',
@@ -243,11 +215,11 @@ def run_backend(command, work, engine, cancel_event=None):
         stdout.read_text(encoding='utf-8', errors='replace'),
         stderr.read_text(encoding='utf-8', errors='replace'))
 
-
 NARRATOR_MODE = "narratore"
-CAST_MODE = "cast"
-VOICE_MODES = (NARRATOR_MODE, CAST_MODE)
 
+CAST_MODE = "cast"
+
+VOICE_MODES = (NARRATOR_MODE, CAST_MODE)
 
 def render(plan_path, output, selected=None, allow_unassigned=False, cancel_event=None, *, voice_eq=FLAT, voice_mode=NARRATOR_MODE, speed_level=0, reuse_previews=False, voice_design=False):
     if type(speed_level) is not int or speed_level not in SPEED_LEVELS:
@@ -458,7 +430,6 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
              'duration': elapsed, 'segments': timings}, cancel_event=cancel_event)
     return output
 
-
 def preview_target(path, index, voice_mode, speed_level, voice_design=False):
     target = path.parent / '.ascolto' / path.stem / voice_mode
     if voice_design:
@@ -466,7 +437,6 @@ def preview_target(path, index, voice_mode, speed_level, voice_design=False):
     if speed_level:
         target /= f'velocita-{speed_level}'
     return target / f'{index + 1:05d}.wav'
-
 
 def cached_profiles_match(data):
     previous = data['profiles']
@@ -477,7 +447,6 @@ def cached_profiles_match(data):
         return False
     return data.get('voice_references', {}) == reference_hashes(previous)
 
-
 def cached_pronunciation_matches(data, plan, segment):
     previous = data.get('language_policy', '')
     if previous == language_policy():
@@ -487,7 +456,6 @@ def cached_pronunciation_matches(data, plan, segment):
     parts = segment_speech_parts(plan, segment)
     return (not any(part.get('audio') for part in parts)
             and data.get('language_parts') == [{'id': segment['id'], 'parts': parts}])
-
 
 def raw_preview(path, index, cancel_event=None, *, voice_mode=NARRATOR_MODE, speed_level=0,
                 cache_only=False, voice_design=False, regenerate=False):
@@ -541,13 +509,11 @@ def raw_preview(path, index, cancel_event=None, *, voice_mode=NARRATOR_MODE, spe
         options['voice_design'] = True
     return render(path, target, selected=index, cancel_event=cancel_event, voice_mode=voice_mode, **options)
 
-
 def preview(path, index, cancel_event=None, *, voice_eq=FLAT, voice_mode=NARRATOR_MODE,
             speed_level=0, voice_design=False, regenerate=False):
     target = raw_preview(path, index, cancel_event, voice_mode=voice_mode, speed_level=speed_level,
                          voice_design=voice_design, regenerate=regenerate)
     return filter_preview(path, index, target, voice_eq, cancel_event)
-
 
 def preview_batch(path, indices, cancel_event, *, voice_eq=FLAT, voice_mode=NARRATOR_MODE,
                   speed_level=0, voice_design=False):
@@ -586,7 +552,6 @@ def preview_batch(path, indices, cancel_event, *, voice_eq=FLAT, voice_mode=NARR
                                    speed_level=speed_level, voice_design=voice_design)
     return [filter_preview(path, index, ready[index], voice_eq, cancel_event) for index in indices]
 
-
 def filter_preview(path, index, target, voice_eq, cancel_event):
     voice_eq = validate_gains(voice_eq)
     if voice_eq == FLAT or not applies_to(read_plan(path)['segments'][index]['role']):
@@ -608,189 +573,6 @@ def filter_preview(path, index, target, voice_eq, cancel_event):
     atomic(filtered, output.getvalue())
     return filtered
 
-
-def write_reading(staged, paths, stop_event, limit_ms):
-    fmt = None
-    remaining = None
-    offset = 0
-    timings = []
-    with wave.open(str(staged), 'wb') as dest:
-        for path in paths:
-            if stop_event.is_set():
-                return
-            from audio_publication import recover_audio
-            recover_audio(path)
-            with wave.open(str(path), 'rb') as source:
-                current = (source.getnchannels(), source.getsampwidth(), source.getframerate())
-                if fmt is None:
-                    fmt = current
-                    dest.setnchannels(fmt[0])
-                    dest.setsampwidth(fmt[1])
-                    dest.setframerate(fmt[2])
-                    if limit_ms is not None:
-                        remaining = (limit_ms * fmt[2] + 500) // 1000
-                if current != fmt:
-                    raise ValueError('Formati vocali incompatibili')
-                frames = source.getnframes()
-                if remaining is not None:
-                    frames = min(frames, remaining)
-                    remaining -= frames
-                if not frames:
-                    break
-                metadata = Path(path).with_suffix('.indice.json')
-                if not metadata.exists() and '-eq-' in Path(path).stem:
-                    metadata = Path(path).with_name(Path(path).stem.rsplit('-eq-', 1)[0] + '.indice.json')
-                info = {}
-                try:
-                    data = json.loads(metadata.read_text(encoding='utf-8'))
-                    info = dict(data['segments'][0])
-                except (OSError, ValueError, KeyError, IndexError):
-                    pass
-                timings.append(dict(info, clip=Path(path).name, seconds=round(offset / fmt[2], 3),
-                                    frames=frames))
-                if len(timings) > 1:
-                    flag_level_jump(timings[-2], timings[-1])
-                offset += frames
-                while frames and not stop_event.is_set():
-                    count = min(frames, fmt[2] * 10)
-                    chunk = source.readframes(count)
-                    if len(chunk) != count * fmt[0] * fmt[1]:
-                        raise ValueError('Clip WAV incompleto')
-                    dest.writeframesraw(chunk)
-                    frames -= count
-    if stop_event.is_set():
-        return
-    with wave.open(str(staged), 'rb') as check:
-        if not offset or check.getnframes() != offset:
-            raise ValueError('Lettura WAV vuota o incompleta')
-    return timings, offset / fmt[2]
-
-
-def write_junction(output, paths, stop_event):
-    """Play the end and start of two clips in one stream."""
-    with wave.open(str(output), 'wb') as dest:
-        fmt = None
-        for index, path in enumerate(paths):
-            if stop_event.is_set():
-                raise ReadingCancelled('Ascolto del raccordo interrotto')
-            with wave.open(str(path), 'rb') as source:
-                current = source.getparams()[:3]
-                if fmt is None:
-                    fmt = current
-                    dest.setparams(source.getparams())
-                if fmt != current:
-                    raise ValueError('Formati vocali incompatibili')
-                count = min(source.getnframes(), fmt[2] * 2)
-                if index == 0:
-                    source.setpos(source.getnframes() - count)
-                dest.writeframes(source.readframes(count))
-    return output
-
-
-def save_reading(output, paths, stop_event, limit_ms=None):
-    """Stream a reading to a validated temporary master before publishing."""
-    from converti_audio import convert
-    from audio_publication import publish_audio
-    output = Path(output)
-    from audio_publication import recover_audio
-    recover_audio(output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(dir=output.parent, suffix='.wav', delete=False) as file:
-        staged = Path(file.name)
-    try:
-        result = write_reading(staged, paths, stop_event, limit_ms)
-        if result is None or stop_event.is_set():
-            return
-        timings, duration = result
-        metadata = {'duration': duration, 'segments': timings, 'mounting_version': MOUNT_VERSION}
-        if output.suffix.lower() == '.mp4':
-            with tempfile.TemporaryDirectory(dir=output.parent) as directory:
-                converted = Path(directory) / 'complete.mp4'
-                convert(staged, converted, cancel_event=stop_event)
-                return publish_audio(converted, output, metadata, stop_event)
-        return publish_audio(staged, output, metadata, stop_event)
-    finally:
-        staged.unlink(missing_ok=True)
-
-
-def play_audio(path, *, stop_event, events, limit_ms=None):
-    """Play a local WAV, trimming only the final segment of a timed reading."""
-    if stop_event.is_set():
-        return
-    path = Path(path).resolve()
-    from audio_publication import recover_audio
-    recover_audio(path)
-    if limit_ms is not None:
-        with wave.open(str(path), 'rb') as wav:
-            needs_trim = wav.getnframes() * 1000 > limit_ms * wav.getframerate()
-        if needs_trim:
-            with tempfile.TemporaryDirectory() as directory:
-                clip = save_reading(Path(directory) / 'clip.wav', [path], stop_event, limit_ms)
-                if clip is not None:
-                    _play_wav(clip, stop_event, events)
-            return
-    _play_wav(path, stop_event, events)
-
-
-def _play_wav(path, stop_event, events):
-    from PySide6.QtCore import QEventLoop, QTimer, QUrl
-    from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-
-    if stop_event.is_set():
-        return
-    commands = queue.Queue()
-    loop = QEventLoop()
-    player = QMediaPlayer()
-    output = QAudioOutput()
-    player.setAudioOutput(output)
-    timer = QTimer(interval=40)
-
-    def update():
-        if stop_event.is_set() or player.error() != QMediaPlayer.Error.NoError:
-            loop.quit()
-            return
-        if player.mediaStatus() == QMediaPlayer.MediaStatus.EndOfMedia:
-            loop.quit()
-            return
-        duration = player.duration()
-        if duration <= 0:
-            return
-        paused = player.playbackState() == QMediaPlayer.PlaybackState.PausedState
-        position = player.position()
-        try:
-            action, seconds = commands.get_nowait()
-        except queue.Empty:
-            pass
-        else:
-            if action == 'toggle':
-                if paused:
-                    player.play()
-                else:
-                    player.pause()
-            else:
-                position = max(0, min(duration, position + seconds * 1000))
-                if position >= duration and not paused:
-                    loop.quit()
-                    return
-                player.setPosition(position)
-        events.put(dict(kind='transport', commands=commands,
-                        paused=player.playbackState() == QMediaPlayer.PlaybackState.PausedState,
-                        elapsed=position / 1000, duration=duration / 1000))
-
-    timer.timeout.connect(update)
-    try:
-        player.setSource(QUrl.fromLocalFile(str(path)))
-        player.play()
-        timer.start()
-        loop.exec()
-        if not stop_event.is_set() and player.error() != QMediaPlayer.Error.NoError:
-            raise OSError(f'Riproduzione WAV: {player.errorString()}')
-    finally:
-        timer.stop()
-        player.stop()
-        player.setSource(QUrl())
-
-
 def reading_plan(source):
     source = Path(source).resolve()
     if source.suffix.lower() == '.json':
@@ -806,7 +588,6 @@ def reading_plan(source):
     if Path(data['source']).resolve() != source:
         raise ValueError('Il piano appartiene a un altro sorgente.')
     return plan
-
 
 def editor(path=None, auto_read=False):
     import sys

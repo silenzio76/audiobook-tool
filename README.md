@@ -80,6 +80,25 @@ The project-wide production tests remain in the manuscript workspace.
 
 ## Current compatibility and dependencies
 
+### Code organization
+
+`audiolibro.py` retains the CLI and the synthesis/preview coordination entry points.
+Shared atomic persistence lives in `project_storage.py`; WAV assembly, publication
+and local playback live in `audio_playback.py`. The existing entry points remain
+available through `audiolibro.py`.
+
+`editor_audiolibro.py` composes the Qt window and owns its application lifecycle.
+Its methods are organized into four responsibility-focused mixins:
+
+- `editor_view.py`: widgets, layout, icons and equalizer controls.
+- `editor_preferences.py`: saved preferences and interface language switching.
+- `editor_document.py`: document loading, segments, pronunciation and voice assignments.
+- `editor_playback.py`: reading sessions, progress, export and transport commands.
+
+The mixins share the window state; they do not create additional windows, workers
+or copies of the document. This is an internal source reorganization, with no
+changes to serialized files, commands or audio settings.
+
 The existing serialized plan and profile schema version remains `1`. This change
 does not migrate saved plans, profiles, narration settings or pronunciation rules.
 Existing CLI commands remain `prepara`, `editor`, `leggi`, `esporta` and `analizza`.
