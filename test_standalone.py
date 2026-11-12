@@ -1,7 +1,9 @@
 """Original neutral fixtures for validating an isolated source candidate."""
 from pathlib import Path
+import json
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import audiolibro as audio
 from lingue_audio import lexicon
@@ -10,6 +12,44 @@ from version_info import __version__, __build__, __build_version__
 
 
 class StandaloneTests(unittest.TestCase):
+    def test_recorded_narrator_pitch_reaches_backend_in_both_modes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            reference = root / 'reference.json'
+            reference.write_text(json.dumps({'origin': 'recorded-reference'}), encoding='utf-8')
+            with patch('profili_vocali.CONFIG', root / 'absent.json'):
+                profiles = load()
+            profiles['characters']['Narratore'].update(
+                engine='qwen3', reference=str(reference), pitch_shift_st=-4)
+            source = root / 'source.md'
+            source.write_text('La finestra era aperta.\n', encoding='utf-8')
+            plan = root / 'plan.json'
+            audio.prepare(source, plan)
+            for mode in ('narratore', 'cast'):
+                with self.subTest(mode=mode), patch('audiolibro.load_profiles', return_value=profiles), \
+                        patch('audiolibro.reference_hashes', return_value={}), \
+                        patch('environment_check.ensure_generation_ready', side_effect=RuntimeError('captured')) as ready:
+                    with self.assertRaisesRegex(RuntimeError, 'captured'):
+                        audio.render(plan, root / 'out.wav', voice_mode=mode)
+                    self.assertEqual(ready.call_args.args[1][0]['character_pitch'], -4)
+
+    def test_qwen_pitch_shift_validation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            reference = Path(directory) / 'reference.json'
+            reference.write_text('{}', encoding='utf-8')
+            with patch('profili_vocali.CONFIG', Path(directory) / 'absent.json'):
+                profiles = load()
+            narrator = profiles['characters']['Narratore']
+            narrator.update(engine='qwen3', reference=str(reference), pitch_shift_st=-4)
+            self.assertEqual(validate(profiles)['characters']['Narratore']['pitch_shift_st'], -4)
+            for invalid in (True, 'four', float('nan'), float('inf'), -13, 13):
+                narrator['pitch_shift_st'] = invalid
+                with self.assertRaises(ValueError):
+                    validate(profiles)
+            narrator.update(engine='windows', pitch_shift_st=-4)
+            with self.assertRaises(ValueError):
+                validate(profiles)
+
     def test_authoritative_version(self):
         self.assertEqual(__version__, Path(__file__).with_name('VERSION').read_text(encoding='ascii').strip())
         self.assertEqual(__build_version__, f'{__version__}+build.{__build__}')

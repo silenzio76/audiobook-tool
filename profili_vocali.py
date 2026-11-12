@@ -67,6 +67,11 @@ def validate(data):
         if item.get('engine') == 'qwen3':
             if not isinstance(item.get('reference'), str) or not Path(item['reference']).is_file():
                 raise ValueError('Campione Qwen mancante: ' + name)
+        if 'pitch_shift_st' in item:
+            shift = item['pitch_shift_st']
+            if (item.get('engine') != 'qwen3' or type(shift) not in (int, float)
+                    or not -12 <= shift <= 12):
+                raise ValueError('Trasposizione Qwen non valida: ' + name)
         for key in ('rate', 'pitch'):
             if type(item.get(key)) is not int or not -10 <= item[key] <= 10:
                 raise ValueError('Parametro fuori intervallo: ' + name + '/' + key)
