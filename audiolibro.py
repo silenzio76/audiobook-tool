@@ -292,6 +292,7 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
                     job['character_speed'] = 1 + .025 * (profile['rate'] - narrator['rate'])
                     job['character_pitch'] = narrator_pitch + .25 * (profile['pitch'] - narrator['pitch'])
                 job['character_pitch'] = job.get('character_pitch', 0) + base.get('pitch_shift_st', 0)
+                job['preserve_formants'] = base.get('preserve_formants', False)
             return job
 
         parts_by_id = {

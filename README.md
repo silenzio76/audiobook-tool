@@ -114,6 +114,11 @@ python audiolibro.py analizza recordings report.json
 ```
 
 `esporta` also accepts `--voice-mode narratore|cast` and `--voice-design`.
+Qwen profiles may specify `pitch_shift_st` (from -12 to 12 semitones) and
+`preserve_formants: true`. The latter uses FFmpeg's Rubber Band filter to retain
+the vocal spectral envelope during transposition; it requires an FFmpeg build
+with that filter. It is opt-in, and does not change older profiles. Profile
+changes invalidate cached previews. Perceived voice quality still needs listening.
 Plans retain a source path
 and source SHA-256 and must be prepared against the actual input file. WAV exports
 use `.indice.json`; MP4 exports use `.mp4.indice.json` metadata. This documents

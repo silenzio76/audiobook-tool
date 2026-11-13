@@ -72,6 +72,9 @@ def validate(data):
             if (item.get('engine') != 'qwen3' or type(shift) not in (int, float)
                     or not -12 <= shift <= 12):
                 raise ValueError('Trasposizione Qwen non valida: ' + name)
+        if 'preserve_formants' in item:
+            if item.get('engine') != 'qwen3' or type(item['preserve_formants']) is not bool:
+                raise ValueError('Impostazione formanti Qwen non valida: ' + name)
         for key in ('rate', 'pitch'):
             if type(item.get(key)) is not int or not -10 <= item[key] <= 10:
                 raise ValueError('Parametro fuori intervallo: ' + name + '/' + key)

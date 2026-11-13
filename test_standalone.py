@@ -49,7 +49,7 @@ class StandaloneTests(unittest.TestCase):
             with patch('profili_vocali.CONFIG', root / 'absent.json'):
                 profiles = load()
             profiles['characters']['Narratore'].update(
-                engine='qwen3', reference=str(reference), pitch_shift_st=-4)
+                engine='qwen3', reference=str(reference), pitch_shift_st=-2, preserve_formants=True)
             source = root / 'source.md'
             source.write_text('La finestra era aperta.\n', encoding='utf-8')
             plan = root / 'plan.json'
@@ -60,7 +60,8 @@ class StandaloneTests(unittest.TestCase):
                         patch('environment_check.ensure_generation_ready', side_effect=RuntimeError('captured')) as ready:
                     with self.assertRaisesRegex(RuntimeError, 'captured'):
                         audio.render(plan, root / 'out.wav', voice_mode=mode)
-                    self.assertEqual(ready.call_args.args[1][0]['character_pitch'], -4)
+                    self.assertEqual(ready.call_args.args[1][0]['character_pitch'], -2)
+                    self.assertTrue(ready.call_args.args[1][0]['preserve_formants'])
 
     def test_qwen_pitch_shift_validation(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -78,6 +79,13 @@ class StandaloneTests(unittest.TestCase):
             narrator.update(engine='windows', pitch_shift_st=-4)
             with self.assertRaises(ValueError):
                 validate(profiles)
+            narrator.update(engine='qwen3', pitch_shift_st=-2)
+            for invalid in ('yes', 1, None):
+                narrator['preserve_formants'] = invalid
+                with self.assertRaises(ValueError):
+                    validate(profiles)
+            narrator['preserve_formants'] = True
+            validate(profiles)
 
     def test_authoritative_version(self):
         self.assertEqual(__version__, Path(__file__).with_name('VERSION').read_text(encoding='ascii').strip())

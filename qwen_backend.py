@@ -197,6 +197,33 @@ def voice_design_chunks(engine, instruction, text, language, splits_left=3):
     yield audio[0], sr
 
 
+def preserve_formant_pitch(samples, sr, semitones):
+    """Transpose speech with Rubber Band while retaining its spectral envelope."""
+    import shutil
+    import subprocess
+    import numpy as np
+
+    executable = shutil.which('ffmpeg')
+    if not executable:
+        raise RuntimeError('La trasposizione con formanti preservate richiede FFmpeg con Rubber Band.')
+    source = np.asarray(samples, dtype='<f4')
+    if source.ndim != 1 or not source.size or not np.isfinite(source).all():
+        raise ValueError('Audio non valido per la trasposizione.')
+    command = [executable, '-nostdin', '-v', 'error', '-f', 'f32le', '-ar', str(sr), '-ac', '1',
+               '-i', 'pipe:0', '-af', f'rubberband=pitch={2 ** (semitones / 12):.12f}:'
+               'formant=preserved:pitchq=quality:transients=smooth',
+               '-f', 'f32le', '-ar', str(sr), '-ac', '1', 'pipe:1']
+    result = subprocess.run(command, input=source.tobytes(), capture_output=True, timeout=90,
+                            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    if result.returncode:
+        raise RuntimeError('Trasposizione vocale non riuscita: ' + result.stderr.decode('utf-8', errors='replace')[-1500:])
+    shifted = np.frombuffer(result.stdout, dtype='<f4').copy()
+    if (not shifted.size or not np.isfinite(shifted).all()
+            or abs(shifted.size - source.size) > sr * .1):
+        raise ValueError('Audio trasposto vuoto, non valido o di durata inattesa.')
+    return np.pad(shifted, (0, max(0, source.size - shifted.size)))[:source.size]
+
+
 def synthesize(job_file):
     os.environ['HF_HUB_OFFLINE'] = '1'
     import numpy as np
@@ -265,8 +292,11 @@ def synthesize(job_file):
         speed *= job.get('reading_speed', 1.0)
         pitch = job.get('character_pitch', 0)
         if pitch:
-            import librosa
-            result = librosa.effects.pitch_shift(result, sr=sr, n_steps=pitch)
+            if job.get('preserve_formants', False):
+                result = preserve_formant_pitch(result, sr, pitch)
+            else:
+                import librosa
+                result = librosa.effects.pitch_shift(result, sr=sr, n_steps=pitch)
         if speed != 1.0:
             import librosa
             result = librosa.effects.time_stretch(result, rate=speed)
