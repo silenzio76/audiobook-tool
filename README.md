@@ -80,6 +80,21 @@ The project-wide production tests remain in the manuscript workspace.
 
 ## Current compatibility and dependencies
 
+### Reading IPA
+
+Select **IPA — Italiano (voce eSpeak NG)** as the document or segment language in
+the editor. Saved plans use `language: "ipa-it"`. Input is broad Italian IPA,
+optionally enclosed in `/.../` or `[...]`; for example `/ˈpɛska/` versus `/ˈpeska/`.
+The explicit converter preserves stress, vowel quality, affricates, consonant
+doubling and `ː` length. Unknown symbols and unsupported diacritics fail explicitly.
+This mode uses eSpeak NG phoneme input (`[[...]]`) in the isolated synthesis
+runtime, not Qwen text interpretation or the immersive narrator's cloned timbre.
+It requires the installed Qwen-profile runtime packages, but no Qwen model or GPU
+for IPA-only jobs. Leave direct VoiceDesign disabled. This is an Italian inventory,
+not a universal IPA implementation; other languages need their own mappings.
+IPA conversion does not automatically transcribe orthographic manuscripts.
+Implementation reference: [eSpeak NG phoneme documentation](https://github.com/espeak-ng/espeak-ng/blob/master/docs/phonemes.md).
+
 ### Code organization
 
 `audiolibro.py` retains the CLI and the synthesis/preview coordination entry points.

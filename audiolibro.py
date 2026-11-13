@@ -260,6 +260,8 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
             delivery_role = 'Narratore' if voice_mode == NARRATOR_MODE and role == 'Da assegnare' else role
             _, rate, pitch = resolve_voice(profiles, delivery_role, tone)
             engine = base.get('engine', 'windows')
+            if all(part['language'] == 'ipa-it' for part in parts):
+                engine = 'qwen3'
             if voice_design and engine != 'qwen3':
                 raise ValueError('VoiceDesign diretto richiede un profilo sintetico Qwen: ' + role)
             if engine == 'windows':
@@ -271,7 +273,7 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
                    'gender': base.get('gender', 'non_specificato'), 'output': str(destination),
                    'engine': engine, 'tone': tone}
             if engine == 'qwen3':
-                job['reference'] = base['reference']
+                job['reference'] = base.get('reference', '')
                 if speed_level:
                     job['reading_speed'] = 1 + .10 * speed_level
                 if voice_design:
@@ -293,6 +295,9 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
                     job['character_pitch'] = narrator_pitch + .25 * (profile['pitch'] - narrator['pitch'])
                 job['character_pitch'] = job.get('character_pitch', 0) + base.get('pitch_shift_st', 0)
                 job['preserve_formants'] = base.get('preserve_formants', False)
+                if all(part['language'] == 'ipa-it' for part in parts):
+                    job['character_pitch'] = 0
+                    job['preserve_formants'] = False
             return job
 
         parts_by_id = {

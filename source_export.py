@@ -26,6 +26,7 @@ EXPORT_FILES = (
     'editor_audiolibro.py', 'equalizzatore_voci.py', 'gestione_voci.py',
     'editor_view.py', 'editor_preferences.py', 'editor_document.py', 'editor_playback.py',
     'project_storage.py', 'audio_playback.py',
+    'ipa_reader.py', 'test_ipa_reader.py',
     'installa_qwen.py', 'lingue_audio.py', 'montaggio_audio.py',
     'numeri_italiani.py', 'pannelli_voce.py', 'pipeline_audio.py',
     'profili_vocali.py', 'qwen_backend.py', 'sintesi_lingue.py',

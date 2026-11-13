@@ -250,7 +250,7 @@ def synthesize(job_file):
                 parts = [{'text': text, 'language': 'auto'}]
             for part in parts:
                 language=part['language']
-                for text in split_text(part['text']):
+                for text in ([part['text']] if language == 'ipa-it' else split_text(part['text'])):
                     if part.get('audio'):
                         import soundfile as sf
                         samples,sr=sf.read(part['audio'],dtype='float32')
