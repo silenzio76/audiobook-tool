@@ -81,6 +81,17 @@ class TransportTests(unittest.TestCase):
         self.assertIsNone(self.window.resume_request)
         self.assertFalse(self.window.pause_button.isEnabled())
 
+    def test_browsing_while_reading_requests_selected_replay(self):
+        self.window.playing_index = 0
+        self.window.pipeline.request_replay = lambda index: index == 1
+        self.window.step_segment(1)
+        self.assertEqual(self.window.listing.currentRow(), 1)
+        self.assertFalse(self.window.follow_playback)
+        self.window.update_transport()
+        self.assertTrue(self.window.segment_play.isEnabled())
+        self.window.segment_play.click()
+        self.assertIn('Riascolto', self.window.status.text())
+
     def test_real_player_pause_resume_stop_and_reopen(self):
         path = Path(self.directory.name) / 'silence.wav'
         with wave.open(str(path), 'wb') as stream:
@@ -123,6 +134,48 @@ class TransportTests(unittest.TestCase):
                 worker.join(6)
             with self.subTest(attempt=attempt):
                 self.assertEqual(observed, ['paused', 'resumed'])
+
+    def test_replay_does_not_duplicate_saved_reading(self):
+        root = Path(self.directory.name)
+        clips = []
+        for index in range(2):
+            clip = root / f'clip{index}.wav'
+            with wave.open(str(clip), 'wb') as stream:
+                stream.setparams((1, 2, 8000, 0, 'NONE', 'not compressed'))
+                stream.writeframes(b'\x10\x00' * 800)
+            clips.append(clip)
+        entered = threading.Event()
+        calls = []
+
+        def play(path, *, stop_event, events, **options):
+            calls.append(path)
+            if path == clips[1] and len(calls) == 2:
+                entered.set()
+                if not stop_event.wait(3):
+                    raise RuntimeError('Replay did not interrupt playback')
+
+        self.window.pipeline = None
+        self.window.select_segment(0)
+        self.window.preload.setChecked(True)
+        output = root / 'reading.wav'
+        with patch.object(self.window, 'choose_audio_file', return_value=output), \
+                patch.object(audio, 'preview', side_effect=lambda path,index,**kw: clips[index]), \
+                patch.object(audio, 'play_audio', side_effect=play):
+            self.window.start(continuous=True)
+            deadline = time.monotonic() + 5
+            requested = False
+            while self.window.busy and time.monotonic() < deadline:
+                self.app.processEvents()
+                self.window.poll()
+                if entered.is_set() and not requested:
+                    self.assertTrue(self.window.pipeline.request_replay(0))
+                    requested = True
+                time.sleep(.005)
+            self.assertFalse(self.window.busy)
+        self.assertTrue(requested)
+        self.assertEqual(calls, [clips[0],clips[1],clips[0],clips[1]])
+        with wave.open(str(output), 'rb') as stream:
+            self.assertEqual(stream.getnframes(), 1600)
 
 
 if __name__ == '__main__':

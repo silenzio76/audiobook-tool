@@ -23,6 +23,8 @@ class Editor(EditorViewMixin, EditorPreferencesMixin, EditorDocumentMixin, Edito
         self.language_switch_requested = False
         self.resume_after_language = None
         self.resume_request = None
+        self.playing_index = self.replaying_index = None
+        self.follow_playback = True
         self.export_requested = False
         self.generate_only = False
         self.junction_work = None

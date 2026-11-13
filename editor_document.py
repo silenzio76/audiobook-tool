@@ -115,7 +115,7 @@ class EditorDocumentMixin:
 
     def step_segment(self, direction):
         index = self.listing.currentRow() + direction
-        if not self.busy and 0 <= index < self.listing.count():
+        if (not self.busy or (not self.exporting and not self.generate_only)) and 0 <= index < self.listing.count():
             self.select_segment(index)
 
     def refresh_segment_audio(self):
@@ -132,6 +132,8 @@ class EditorDocumentMixin:
                 pass
         for control in (self.segment_play, self.segment_voice, self.segment_pronunciation):
             control.setEnabled(available)
+        if self.busy and not self.exporting and not self.generate_only:
+            self.segment_play.setEnabled(index >= 0 and not self.pipeline.stop_event.is_set())
         self.segment_generate.setEnabled(available and not ready)
         self.segment_regenerate.setEnabled(available and ready)
         self.segment_junction.setEnabled(available and index + 1 < self.listing.count())
@@ -205,6 +207,8 @@ class EditorDocumentMixin:
             self.refresh_segment_audio()
             return
         segment = self.plan['segments'][index]
+        if self.busy and index != self.playing_index:
+            self.follow_playback = False
         self.segment_label.setText(tr('Segmento {:03}  ·  Riga {}').format(segment['id'], segment['line']))
         self.content.setPlainText(segment['text'])
         self.segment_pause.setValue(segment.get('pause_ms', -1))

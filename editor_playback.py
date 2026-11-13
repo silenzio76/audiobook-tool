@@ -15,6 +15,30 @@ from profili_vocali import tone_label
 
 class EditorPlaybackMixin:
     """Editor playback responsibilities of the Qt editor."""
+    def activate_selected_segment(self):
+        if self.busy and self.listing.currentRow() != self.playing_index:
+            self.listen_selected_segment()
+        else:
+            self.toggle_segment_playback()
+
+    def listen_selected_segment(self):
+        index = self.listing.currentRow()
+        if index < 0:
+            return
+        if not self.busy:
+            self.resume_request = None
+            self.start(quick=True)
+            return
+        if self.exporting or self.generate_only or self.pipeline.stop_event.is_set():
+            return
+        if (self.transport and self.transport['paused'] and
+                (self.playing_index is None or index == self.playing_index) and self.replaying_index is None):
+            self.send_transport('toggle')
+        elif self.pipeline.request_replay(index):
+            self.status.setText(tr('Riascolto del segmento selezionato; poi riprendo la lettura interrotta.'))
+        else:
+            self.status.setText(tr('Audio del segmento non ancora pronto. La preparazione continua.'))
+
     def toggle_segment_playback(self):
         if self.busy:
             self.send_transport('toggle')
@@ -133,6 +157,8 @@ class EditorPlaybackMixin:
         self.active_request = (index, export, continuous, from_start, self.reading_duration.text(),
                                quick, generate_only, regenerate, junction)
         self.resume_request = None
+        self.playing_index = self.replaying_index = None
+        self.follow_playback = True
         segments = self.plan['segments']
         source_indices = tuple(indices)
         speed = 1 + .10 * self.reading_speed.currentData()
@@ -188,24 +214,29 @@ class EditorPlaybackMixin:
         def generate_batch(batch, cancel):
             return self.audio.preview_batch(self.path, batch, cancel, **audio_options)
 
-        sections = []
+        sections = {}
+        played_durations = {}
         played_ms = 0.0
 
         def play_segment(audio):
             nonlocal played_ms
             options = {}
-            if limit_ms is not None:
+            if limit_ms is not None and not self.pipeline.replaying:
                 options['limit_ms'] = max(1, round(limit_ms - played_ms))
-            self.audio.play_audio(audio, stop_event=self.pipeline.stop_event, events=self.events, **options)
-            sections.append(audio)
-            if limit_ms is not None and not self.pipeline.stop_event.is_set():
+            self.audio.play_audio(audio, stop_event=self.pipeline.playback_stop_event, events=self.events, **options)
+            if (self.pipeline.replaying or self.pipeline.playback_stop_event.is_set()
+                    or self.pipeline.stop_event.is_set()):
+                return
+            sections[self.pipeline.current_index] = audio
+            if limit_ms is not None:
                 with wave.open(str(audio), 'rb') as wav:
-                    played_ms += wav.getnframes() * 1000 / wav.getframerate()
+                    played_durations[self.pipeline.current_index] = wav.getnframes() * 1000 / wav.getframerate()
+                    played_ms = sum(played_durations.values())
                 return played_ms < limit_ms
 
         def save_playback():
             if sections:
-                return self.audio.save_reading(target, sections, self.pipeline.stop_event, limit_ms)
+                return self.audio.save_reading(target, list(sections.values()), self.pipeline.stop_event, limit_ms)
 
         self.total = len(indices)
         self.reading_indices = tuple(indices)
@@ -240,7 +271,7 @@ class EditorPlaybackMixin:
                                       generate_batch=generate_batch if fractional else None,
                                       on_playback_complete=save_playback if target is not None and not export else None)
         for control in self.edit_controls:
-            if control is not self.listing or not quick:
+            if control is not self.listing or export or generate_only:
                 control.setEnabled(False)
         self.pipeline.start()
         self.refresh_segment_audio()
@@ -269,14 +300,22 @@ class EditorPlaybackMixin:
                 if self.exporting or self.generate_only:
                     self.last_audio = event['path']
             elif kind == 'playing':
+                self.playing_index = event['index']
+                self.replaying_index = None
+                self.transport = None
                 self.position = event['position']
                 if self.junction_work is None:
                     self.last_audio = event['path']
-                self.select_segment(event['index'])
+                if self.follow_playback:
+                    self.select_segment(event['index'])
                 self.status.setText(tr('Lettura in corso.') if self.pipeline.producer_done.is_set()
                                     else tr('Lettura e vocalizzazione in parallelo.'))
             elif kind == 'saved':
                 self.last_audio = event['path']
+            elif kind == 'replaying':
+                self.replaying_index = event['index']
+                self.transport = None
+                self.status.setText(tr('Riascolto segmento {}').format(event['index'] + 1))
             elif kind == 'played':
                 self.played = event['position']
                 self.read_bar.setValue(self.played * 100)
@@ -298,9 +337,13 @@ class EditorPlaybackMixin:
             self.read_label.setText(tr('Lettura arrestata'))
         elif self.transport:
             elapsed, duration = self.transport['elapsed'], self.transport['duration']
-            self.read_bar.setValue(self.played * 100 + min(99, int(100 * elapsed / duration)))
+            if self.replaying_index is None:
+                self.read_bar.setValue(self.played * 100 + min(99, int(100 * elapsed / duration)))
             state = tr('In pausa') if self.transport['paused'] else tr('In riproduzione')
             self.read_label.setText(f'{state}  ·  {self.position}/{self.total}  ·  {self.clock(elapsed)} / {self.clock(duration)}')
+            if self.replaying_index is not None:
+                self.read_label.setText(tr('Riascolto segmento {}').format(self.replaying_index + 1) +
+                                        f'  ·  {self.clock(elapsed)} / {self.clock(duration)}')
         elif not self.exporting:
             suffix = tr('  ·  Attendo audio') if self.played < self.total else ''
             self.read_label.setText(tr('Lettura: {}/{} completati').format(self.played, self.total) + suffix)
@@ -337,6 +380,9 @@ class EditorPlaybackMixin:
                 preparation = tr('circa {} rimanenti').format(self.clock(generation_remaining + 0.999))
             self.preparation_eta.setText(tr('Prima dell’ascolto: ') + preparation)
 
+        if self.replaying_index is not None:
+            self.reading_eta.setText(tr('Fine lettura: stima sospesa durante il riascolto'))
+            return
         if self.transport and self.transport['paused']:
             self.reading_eta.setText(tr('Fine lettura: stima sospesa durante la pausa'))
             return
@@ -380,6 +426,7 @@ class EditorPlaybackMixin:
     def finish(self):
         error = self.pipeline.error
         self.pipeline = self.transport = self.generation_started = None
+        self.playing_index = self.replaying_index = None
         junction = self.junction_work is not None
         if junction:
             self.junction_work.cleanup()
@@ -424,7 +471,8 @@ class EditorPlaybackMixin:
         self.pause_button.setIcon(self.command_icon(icon.SP_MediaPlay, 'green') if paused or resumable
                                   else self.command_icon(icon.SP_MediaPause, 'amber'))
         self.pause_button.setEnabled(active or resumable)
-        self.segment_play.setEnabled(active or (not self.busy and self.path is not None))
+        self.segment_play.setEnabled((self.busy and not self.exporting and not self.generate_only and not stopping)
+                                     or (not self.busy and self.path is not None))
         for control in (self.back_button, self.forward_button):
             control.setEnabled(active)
         self.stop_button.setEnabled((self.busy or self.auto_timer.isActive()) and not stopping)
@@ -444,6 +492,8 @@ class EditorPlaybackMixin:
                 self.resume_request = dict(index=self.listing.currentRow(),
                                            continuous=self.active_request[2],
                                            duration=self.reading_duration.text())
+                if self.replaying_index is not None or self.playing_index is not None:
+                    self.resume_request['index'] = self.replaying_index if self.replaying_index is not None else self.playing_index
             self.pipeline.stop()
             self.status.setText(tr('Arresto di vocalizzazione e lettura in corso…'))
         else:

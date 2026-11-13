@@ -30,6 +30,11 @@ class AudioPipeline:
         self.preload_all = preload_all
         self.prepared = []  # Disk paths only, not audio samples in RAM.
         self.stop_event = threading.Event()
+        self.playback_stop_event = threading.Event()
+        self.available = {}
+        self.replay_request = None
+        self.replaying = False
+        self.current_index = None
         self.producer_done = threading.Event()
         self._error = None
         self._lock = threading.Lock()
@@ -55,6 +60,40 @@ class AudioPipeline:
 
     def stop(self):
         self.stop_event.set()
+        self.playback_stop_event.set()
+
+    def request_replay(self, index):
+        """Interrupt playback only; generation and the normal queue stay intact."""
+        with self._lock:
+            if self.play is None or self.stop_event.is_set() or self.finished or index not in self.available:
+                return False
+            self.replay_request = index
+            self.playback_stop_event.set()
+            return True
+
+    def _play_with_replays(self, position, index, path, duration):
+        self.current_index = index
+        while not self.stop_event.is_set():
+            with self._lock:
+                if self.stop_event.is_set():
+                    return False
+                replay = self.replay_request
+                self.replay_request = None
+                self.playback_stop_event.clear()
+                replay_path = self.available[replay] if replay is not None else None
+            self.replaying = replay is not None
+            if self.replaying:
+                self._emit('replaying', index=replay, path=replay_path)
+                self.play(replay_path)
+                continue
+            self._emit('playing', position=position, index=index, path=path,
+                       duration=duration, started=time.monotonic())
+            keep_reading = self.play(path)
+            with self._lock:
+                interrupted = self.playback_stop_event.is_set()
+            if not interrupted:
+                return keep_reading
+        return False
 
     def _emit(self, kind, **fields):
         self.events.put(dict(kind=kind, **fields))
@@ -64,6 +103,7 @@ class AudioPipeline:
             if self._error is None:
                 self._error = str(error)
         self.stop_event.set()
+        self.playback_stop_event.set()
         self._emit('error', message=str(error))
 
     def _analyze(self):
@@ -127,6 +167,8 @@ class AudioPipeline:
         try:
             for position, (index, path, seconds) in enumerate(self._generated_paths(), 1):
                 if self.stop_event.is_set(): break
+                with self._lock:
+                    self.available[index] = path
                 self._emit('generated', position=position, index=index, path=path,
                            synthesis_seconds=seconds, duration=self.duration(path))
                 if self.play is None: continue
@@ -175,10 +217,8 @@ class AudioPipeline:
                     continue
                 if self.stop_event.is_set(): break
                 duration = self.duration(path)
-                self._emit('playing', position=position, index=index, path=path,
-                           duration=duration, started=time.monotonic())
                 if self.stop_event.is_set(): break
-                keep_reading = self.play(path)
+                keep_reading = self._play_with_replays(position, index, path, duration)
                 if self.stop_event.is_set(): break
                 self._emit('played', position=position, index=index, path=path)
                 if keep_reading is False:

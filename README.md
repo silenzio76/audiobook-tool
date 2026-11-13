@@ -82,6 +82,13 @@ The project-wide production tests remain in the manuscript workspace.
 
 ### Reading IPA
 
+During reading the segment list remains navigable. Select a generated segment and
+click Listen (or double-click it) to replay it while synthesis continues. The
+interrupted normal segment then restarts from its beginning. Browsing does not
+change voice assignments, and playback does not steal the selected row. Segments
+not ready yet show a status message. Replay clips are excluded from the saved
+reading and from its timed-reading budget.
+
 Select **IPA — Italiano (voce eSpeak NG)** as the document or segment language in
 the editor. Saved plans use `language: "ipa-it"`. Input is broad Italian IPA,
 optionally enclosed in `/.../` or `[...]`; for example `/ˈpɛska/` versus `/ˈpeska/`.

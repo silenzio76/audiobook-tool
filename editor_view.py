@@ -287,7 +287,7 @@ class EditorViewMixin:
         body.addWidget(self.content, 1)
         actions = Qt.QHBoxLayout()
         body.addLayout(actions)
-        self.segment_play = self.button(actions, tr('Ascolta'), self.toggle_segment_playback, icon.SP_MediaPlay, accent='green')
+        self.segment_play = self.button(actions, tr('Ascolta'), self.listen_selected_segment, icon.SP_MediaPlay, accent='green')
         self.segment_generate = self.button(actions, tr('Genera'), lambda: self.start(quick=True, generate_only=True),
                                             'generate', accent='blue')
         self.segment_regenerate = self.button(actions, tr('Rigenera'), lambda: self.start(
@@ -304,7 +304,8 @@ class EditorViewMixin:
         body.addWidget(self.segment_audio_status)
         self.segment_play.setToolTip(tr('Ascolta') + '\n' + tr('Ascolta o metti in pausa con Spazio nella lista dei segmenti.'))
         self.play_shortcut = QtGui.QShortcut(QtGui.QKeySequence('Space'), self)
-        self.play_shortcut.activated.connect(self.toggle_segment_playback)
+        self.play_shortcut.activated.connect(self.activate_selected_segment)
+        self.listing.itemDoubleClicked.connect(lambda *_: self.listen_selected_segment())
         Qt.QApplication.instance().focusChanged.connect(self.update_play_shortcut)
         for key, action in [('Ctrl+Up', lambda: self.step_segment(-1)),
                             ('Ctrl+Down', lambda: self.step_segment(1))]:
