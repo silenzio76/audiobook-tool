@@ -440,8 +440,6 @@ class EditorViewMixin:
             QLabel#documentTitle { font-size: 18px; font-weight: 600; }
             QLabel#segmentTitle { font-weight: 600; }
             QToolButton { padding: 3px 7px; }
-            QToolButton { color: palette(button-text); }
-            QComboBox { color: palette(text); }
             QToolButton:focus { border: 2px solid palette(highlight); border-radius: 4px; }
             QProgressBar { border: 1px solid palette(mid); border-radius: 3px; background: palette(base); }
             QProgressBar::chunk { background: palette(highlight); border-radius: 2px; }
