@@ -2,11 +2,14 @@
 from ui_language import display_tone, tr
 import json
 from pathlib import Path
+import os
 import wave
 from PySide6 import QtCore, QtWidgets as Qt
-from gestione_voci import assignment, change_document_language, change_pause, change_spoken_text, import_voice_reference, set_narrator_reference, split_segment
+from gestione_voci import assignment, change_document_voice_model, change_pause, change_spoken_text, import_voice_reference, set_narrator_reference, split_segment
 from lingue_audio import LANGUAGES, segment_language, speech_parts
 from profili_vocali import load as load_profiles, tone_label
+from voice_conversion import MODELS, document_model, segment_model, installed
+from version_info import PUBLIC_NAME
 
 
 class EditorDocumentMixin:
@@ -18,7 +21,7 @@ class EditorDocumentMixin:
         self.update_transport()
         directory = str(Path(self.plan['source']).parent) if self.path is not None else ''
         selected, _ = Qt.QFileDialog.getOpenFileName(
-            self, tr('Apri Markdown'), directory, tr('File Markdown (*.md *.markdown)'))
+            self, tr('Apri documento'), directory, tr('Documenti (*.md *.markdown *.json)'))
         if selected:
             try:
                 self.load_document(selected)
@@ -30,18 +33,21 @@ class EditorDocumentMixin:
         plan = self.audio.read_plan(path)
         self.path, self.plan = path, plan
         self.resume_request = None
-        self.document_language.setCurrentIndex(self.document_language.findData(plan.get('language', 'auto')))
+        self.document_model.setCurrentIndex(self.document_model.findData(document_model(plan)))
         self.last_audio = None
         self.preparation_eta.clear()
         self.reading_eta.clear()
         title = Path(plan['source']).stem
-        self.setWindowTitle(tr('Audiolibro di revisione — ') + title)
+        self.setWindowTitle(PUBLIC_NAME+' — '+title)
         self.document_title.setText(title.replace('_', ' '))
         self.rebuild_segments(0)
         self.navigator.setCurrentIndex(0)
-        self.ribbon_tabs.setCurrentIndex(0)
-        for label, bar, name in [(self.gen_label, self.gen_bar, tr('Elaborazione')),
-                                 (self.read_label, self.read_bar, tr('Lettura'))]:
+        self.ribbon_tabs.setCurrentIndex(self.listen_tab_index)
+        self.refresh_library(Path(plan['source']).parent)
+        self.refresh_model_status()
+        for label, bar, name in [(self.gen_label, self.gen_bar, tr('Pronuncia')),
+                                 (self.voice_label,self.voice_bar,tr('Voce')),
+                                 (self.read_label, self.read_bar, tr('Ascolto'))]:
             label.setText(name + tr(': in attesa'))
             bar.setValue(0)
         for control in self.edit_controls:
@@ -50,19 +56,63 @@ class EditorDocumentMixin:
         self.status.setText(tr('Scegli come avviare la lettura dalla scheda Ascolto.'))
         self.update_transport()
 
-    def set_document_language(self, choice):
+    def set_document_model(self, choice):
         if self.busy or self.path is None:
             return
-        selected = self.document_language.itemData(choice)
+        selected = self.document_model.itemData(choice)
         try:
-            self.plan = change_document_language(self.path, self.plan, selected)
+            self.plan = change_document_voice_model(self.path, self.plan, selected)
         except (OSError, ValueError) as error:
-            self.document_language.setCurrentIndex(self.document_language.findData(self.plan.get('language', 'auto')))
-            Qt.QMessageBox.warning(self, tr('Lingua non salvata'), str(error))
+            self.document_model.setCurrentIndex(self.document_model.findData(document_model(self.plan)))
+            Qt.QMessageBox.warning(self, tr('Modello non salvato'), str(error))
             return
         self.show_language()
         self.refresh_segment_audio()
-        self.status.setText(tr('Lingua del documento salvata.'))
+        self.refresh_model_status()
+        self.status.setText(tr('Modello voce salvato.'))
+
+    def refresh_model_status(self):
+        selected=document_model(self.plan)
+        self.model_status.setText(tr('Seed-VC locale · qualità in valutazione') if selected=='seed-vc' and installed()
+                                 else tr('Seed-VC non installato') if selected=='seed-vc'
+                                 else tr('Sintesi diretta · formato del testo rilevato automaticamente'))
+        if selected=='seed-vc':
+            self.voice_design.setChecked(False)
+        self.voice_design.setEnabled(not self.busy and selected=='source')
+
+    def choose_library_folder(self):
+        if self.busy: return
+        folder=Qt.QFileDialog.getExistingDirectory(self,tr('Cartella dei documenti'),
+                                                   str(self.library_folder or Path.cwd()))
+        if folder: self.refresh_library(Path(folder))
+
+    def refresh_library(self, folder):
+        self.library_folder=Path(folder)
+        self.library_path.setText(str(self.library_folder))
+        self.library_path.setToolTip(str(self.library_folder))
+        self.file_listing.clear()
+        for path in sorted(self.library_folder.iterdir(),key=lambda p:p.name.casefold()):
+            if path.is_file() and path.suffix.lower() in ('.md','.markdown','.json'):
+                item=Qt.QTreeWidgetItem([path.name,path.suffix[1:].upper()])
+                item.setData(0,QtCore.Qt.ItemDataRole.UserRole,str(path))
+                item.setToolTip(0,str(path))
+                self.file_listing.addTopLevelItem(item)
+
+    def open_library_document(self, *_):
+        if self.busy: return
+        item=self.file_listing.currentItem()
+        if item is None: return
+        try:
+            self.load_document(item.data(0,QtCore.Qt.ItemDataRole.UserRole))
+        except (OSError,ValueError) as error:
+            Qt.QMessageBox.warning(self,tr('Documento non aperto'),str(error))
+
+    def open_document_folder(self):
+        folder=self.library_folder
+        if folder is None and self.path is not None:
+            folder=Path(self.plan['source']).parent
+        if folder is not None:
+            os.startfile(str(folder))
 
     def rebuild_segments(self, index):
         with QtCore.QSignalBlocker(self.listing):
@@ -124,11 +174,11 @@ class EditorDocumentMixin:
         ready = False
         if available:
             try:
-                ready = self.audio.raw_preview(
+                ready = self.audio.preview(
                     self.path, index, cache_only=True, voice_mode=self.voice_mode.currentData(),
                     speed_level=self.reading_speed.currentData(), voice_design=self.voice_design.isChecked(),
                 ) is not None
-            except (OSError, ValueError):
+            except (OSError, ValueError, RuntimeError):
                 pass
         for control in (self.segment_play, self.segment_voice, self.segment_pronunciation):
             control.setEnabled(available)
@@ -215,7 +265,8 @@ class EditorDocumentMixin:
         self.refresh_segment_audio()
         self.role.setCurrentText(segment['role'])
         self.tones.set_value(segment.get('tone', 'Neutro'))
-        self.language.setCurrentIndex(self.language.findData(segment.get('language', 'auto')))
+        with QtCore.QSignalBlocker(self.segment_model):
+            self.segment_model.setCurrentIndex(self.segment_model.findData(segment.get('voice_model','inherit')))
         self.show_language()
 
     def show_language(self):
@@ -226,10 +277,10 @@ class EditorDocumentMixin:
         gender = profile.get('gender', 'non_specificato').replace('_', ' ')
         try:
             segment = self.plan['segments'][index]
-            selected = segment_language(self.plan, {'language': self.language.currentData()})
+            selected = segment_language(self.plan,segment)
             parts = speech_parts(segment.get('spoken_text', segment['text']), selected)
-            languages = ', '.join(dict.fromkeys(tr(LANGUAGES[part['language']]) for part in parts))
-            self.language_hint.setText(tr('Genere profilo: {}  ·  Lingua del testo: {}').format(gender, languages))
+            model=segment_model(self.plan,dict(segment,voice_model=self.segment_model.currentData() or 'inherit'))
+            self.language_hint.setText(tr('Genere profilo: {} · Modello: {}').format(gender,tr(MODELS[model])))
         except ValueError as error:
             self.language_hint.setText(str(error))
 
@@ -325,7 +376,7 @@ class EditorDocumentMixin:
             return
         self.select_segment(item.data(0, QtCore.Qt.ItemDataRole.UserRole))
         self.navigator.setCurrentIndex(0)
-        self.ribbon_tabs.setCurrentIndex(1)
+        self.ribbon_tabs.setCurrentIndex(self.voices_tab_index)
         self.role.setFocus()
 
     def delete_assignment(self):
@@ -349,7 +400,7 @@ class EditorDocumentMixin:
             return False
         try:
             self.plan = assignment(self.path, self.plan, index, self.role.currentText(),
-                                   self.tones.value(), language=self.language.currentData())
+                                   self.tones.value(), voice_model=self.segment_model.currentData())
         except Exception as error:
             Qt.QMessageBox.critical(self, tr('Attribuzione non salvata'), str(error))
             return False
@@ -367,7 +418,7 @@ class EditorDocumentMixin:
             index = (current + offset) % len(segments)
             if segments[index]['role'] == 'Da assegnare':
                 self.navigator.setCurrentIndex(0)
-                self.ribbon_tabs.setCurrentIndex(1)
+                self.ribbon_tabs.setCurrentIndex(self.voices_tab_index)
                 self.select_segment(index)
                 self.role.setFocus()
                 return

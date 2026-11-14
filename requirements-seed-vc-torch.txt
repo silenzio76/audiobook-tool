@@ -1,0 +1,3 @@
+# Windows x64, Python 3.10, official CUDA 12.1 index.
+torch==2.4.1+cu121
+torchaudio==2.4.1+cu121

@@ -13,7 +13,7 @@ class ReadingCancelled(Exception):
 class AudioPipeline:
     def __init__(self, indices, generate, play, events, buffer_size=2, startup_items=1,
                  preload_all=False, *, analyze=None, batch_size=None, generate_batch=None,
-                 on_playback_complete=None):
+                 on_playback_complete=None, convert=None, on_conversion_finished=None):
         if buffer_size < 1 or not 1 <= startup_items <= buffer_size:
             raise ValueError('Il pre-caricamento deve rientrare nella capacità della coda')
         self.indices = tuple(indices)
@@ -21,6 +21,10 @@ class AudioPipeline:
         self.generate_batch = generate_batch
         self.play = play
         self.on_playback_complete = on_playback_complete
+        self.convert = convert
+        self.on_conversion_finished = on_conversion_finished
+        self.pronounced = queue.Queue(maxsize=buffer_size)
+        self.pronunciation_done = threading.Event()
         self.events = events
         self.ready = queue.Queue(maxsize=buffer_size)
         self.analyze = analyze
@@ -39,9 +43,11 @@ class AudioPipeline:
         self._error = None
         self._lock = threading.Lock()
         self.threads = (
-            threading.Thread(target=self._produce, name=tr('Vocalizzazione'), daemon=True),
-            threading.Thread(target=self._consume, name=tr('Lettura'), daemon=True),
+            threading.Thread(target=self._produce, name='Pronuncia', daemon=True),
         )
+        if self.convert is not None:
+            self.threads += (threading.Thread(target=self._convert, name='Voce', daemon=True),)
+        self.threads += (threading.Thread(target=self._consume, name='Ascolto', daemon=True),)
         if self.analyze is not None:
             self.threads += (threading.Thread(target=self._analyze, name='Analisi testo', daemon=True),)
 
@@ -167,25 +173,69 @@ class AudioPipeline:
         try:
             for position, (index, path, seconds) in enumerate(self._generated_paths(), 1):
                 if self.stop_event.is_set(): break
-                with self._lock:
-                    self.available[index] = path
                 self._emit('generated', position=position, index=index, path=path,
                            synthesis_seconds=seconds, duration=self.duration(path))
-                if self.play is None: continue
-                if self.preload_all:
-                    self.prepared.append((position, index, path))
-                    continue
-                while not self.stop_event.is_set():
-                    try:
-                        self.ready.put((position, index, path), timeout=.1)
-                        break
-                    except queue.Full:
-                        continue
+                if self.convert is None:
+                    self._publish_ready(position,index,path)
+                else:
+                    self._put(self.pronounced,(position,index,path))
         except Exception as error:
             if not self.stop_event.is_set(): self._fail(error)
         finally:
-            self.producer_done.set()
+            self.pronunciation_done.set()
+            if self.convert is None:
+                self.producer_done.set()
             self._emit('generation_finished')
+
+    def _put(self, target, item):
+        while not self.stop_event.is_set():
+            try:
+                target.put(item,timeout=.1)
+                return
+            except queue.Full:
+                pass
+
+    def _publish_ready(self, position, index, path):
+        with self._lock:
+            self.available[index]=path
+        if self.play is None:
+            return
+        if self.preload_all:
+            self.prepared.append((position,index,path))
+        else:
+            self._put(self.ready,(position,index,path))
+
+    def _convert(self):
+        try:
+            while not self.stop_event.is_set():
+                try:
+                    position,index,source=self.pronounced.get(timeout=.1)
+                except queue.Empty:
+                    if self.pronunciation_done.is_set():
+                        break
+                    continue
+                started=time.monotonic()
+                self._emit('converting',index=index,position=position,started=started)
+                try:
+                    path=self.convert(index,source,self.stop_event)
+                except Exception as error:
+                    raise RuntimeError(tr('Voce · segmento {}: {}').format(index+1,error)) from error
+                if self.stop_event.is_set():
+                    break
+                self._emit('converted',index=index,position=position,path=path,
+                           conversion_seconds=time.monotonic()-started,duration=self.duration(path))
+                self._publish_ready(position,index,path)
+        except Exception as error:
+            if not self.stop_event.is_set():
+                self._fail(error)
+        finally:
+            try:
+                if self.on_conversion_finished is not None:
+                    self.on_conversion_finished()
+            except Exception as error:
+                if not self.stop_event.is_set(): self._fail(error)
+            self.producer_done.set()
+            self._emit('conversion_finished')
 
     def _consume(self):
         if self.play is None:

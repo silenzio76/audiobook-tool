@@ -1,4 +1,23 @@
-# Audiobook manuscript review tool
+# will-o'-the-wisp
+
+The public product name is **will-o'-the-wisp**. Python modules, saved-plan IDs,
+settings and CLI entry points retain the internal name `audiolibro`.
+
+The desktop workflow is **Pronunciation → Voice → Listening**. Select Seed-VC
+for offline audio-to-audio conversion using the active narrator/character WAV
+reference, or choose the base voice for direct synthesis. Per-segment model
+overrides inherit the document choice by default. Existing language metadata is
+retained internally; IPA files still use explicit phoneme input, never Qwen text
+guessing. The voice worker keeps models loaded through the conversion session.
+
+The Files tab opens Markdown or JSON plans and browses a selected document folder.
+Interface-language preferences remain independent of speech models. Converted
+preview caches are separate from pronunciation audio and include source/reference
+hashes, model provenance and settings. Playback/replay and prepared exports use
+final clips; a failed conversion cannot silently fall back to source audio.
+
+Seed-VC quality remains provisional. The UI/model integration and valid PCM do
+not certify humanlike delivery, speaker similarity or IPA fidelity after conversion.
 
 Copyright (C) 2026 silenzio76. SPDX-License-Identifier: GPL-3.0-or-later.
 

@@ -1,5 +1,6 @@
 """Qt editor composition and application lifecycle."""
 from ui_language import set_language, tr
+from version_info import PUBLIC_NAME, __build_version__
 import queue
 from PySide6 import QtCore, QtWidgets as Qt
 
@@ -29,10 +30,11 @@ class Editor(EditorViewMixin, EditorPreferencesMixin, EditorDocumentMixin, Edito
         self.generate_only = False
         self.junction_work = None
         self.last_audio = self.generation_started = self.transport = None
-        self.generated = self.played = self.position = self.total = 0
+        self.generated = self.converted = self.played = self.position = self.total = 0
+        self.conversion_started = None
         self.edit_controls = []
         self.icons = {}
-        self.setWindowTitle(tr('Audiolibro di revisione'))
+        self.setWindowTitle(PUBLIC_NAME)
         self.build()
         self.restore_preferences()
         self.voice_mode.currentIndexChanged.connect(self.refresh_narrator_label)
@@ -64,6 +66,7 @@ def run(path, audio, auto_read=False):
         app = Qt.QApplication([])
         if 'windows11' in Qt.QStyleFactory.keys():
             app.setStyle('windows11')
+    app.setApplicationDisplayName(PUBLIC_NAME)
     settings = QtCore.QSettings('Di Spiriti e Scisma', 'Audiolibro')
     resume = None
     while True:

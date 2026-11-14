@@ -13,7 +13,7 @@ def checked_plan_copy(path, original):
     return copy.deepcopy(original)
 
 
-def assignment(path, original, index, role=None, tone=None, delete=False, language=None):
+def assignment(path, original, index, role=None, tone=None, delete=False, language=None, voice_model=None):
     from audiolibro import save
     from profili_vocali import load, tone_label
     result = checked_plan_copy(path, original)
@@ -22,6 +22,7 @@ def assignment(path, original, index, role=None, tone=None, delete=False, langua
         segment['role'] = 'Da assegnare' if segment['text'].startswith('«') else 'Narratore'
         segment.pop('tone', None)
         segment.pop('language', None)
+        segment.pop('voice_model', None)
     else:
         if role not in load()['characters']: raise ValueError('Profilo non valido')
         segment.update(role=role, tone=tone_label(tone))
@@ -29,8 +30,24 @@ def assignment(path, original, index, role=None, tone=None, delete=False, langua
             from lingue_audio import LANGUAGES
             if language not in LANGUAGES: raise ValueError('Lingua non valida')
             segment['language']=language
+        if voice_model is not None:
+            from voice_conversion import MODELS
+            if voice_model not in (*MODELS,'inherit'):
+                raise ValueError('Modello voce non valido.')
+            segment['voice_model']=voice_model
     segment.pop('voice_review', None)
     save(path, result)
+    return result
+
+
+def change_document_voice_model(path, original, model):
+    from audiolibro import save
+    from voice_conversion import MODELS
+    if model not in MODELS:
+        raise ValueError('Modello voce non valido.')
+    result=checked_plan_copy(path,original)
+    result['voice_model']=model
+    save(path,result)
     return result
 
 

@@ -3,7 +3,8 @@ from ui_language import current_language, display_tone, tr
 from PySide6 import QtCore, QtGui, QtSvg, QtWidgets as Qt
 from gestione_voci import profile_dialog
 from equalizzatore_voci import BANDS, FLAT, GAIN_LIMIT, SOFT
-from lingue_audio import DOCUMENT_LANGUAGES, LANGUAGES
+from voice_conversion import MODELS
+from version_info import PUBLIC_NAME, __build_version__
 from pannelli_voce import TonePanel, gender_dialog, pronunciation_dialog
 from profili_vocali import load as load_profiles
 
@@ -97,7 +98,13 @@ class EditorViewMixin:
     def ribbon(self, name):
         page = Qt.QWidget()
         layout = Qt.QHBoxLayout(page)
-        self.ribbon_tabs.addTab(page, name)
+        layout.setContentsMargins(10,8,10,8)
+        scroll = Qt.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(Qt.QFrame.Shape.NoFrame)
+        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(page)
+        self.ribbon_tabs.addTab(scroll, name)
         return layout
 
     @staticmethod
@@ -107,13 +114,34 @@ class EditorViewMixin:
         return Qt.QHBoxLayout(box)
 
     def build(self):
+        palette=self.palette()
+        dark=palette.color(QtGui.QPalette.ColorRole.Window).lightness()<128
+        foreground='#edf2f5' if dark else '#17212b'
+        for role in (QtGui.QPalette.ColorRole.Text,QtGui.QPalette.ColorRole.WindowText,QtGui.QPalette.ColorRole.ButtonText):
+            for group in (QtGui.QPalette.ColorGroup.Active,QtGui.QPalette.ColorGroup.Inactive):
+                palette.setColor(group,role,QtGui.QColor(foreground))
+            palette.setColor(QtGui.QPalette.ColorGroup.Disabled,role,QtGui.QColor('#87939e' if dark else '#697581'))
+        palette.setColor(QtGui.QPalette.ColorRole.Base,QtGui.QColor('#172027' if dark else '#ffffff'))
+        palette.setColor(QtGui.QPalette.ColorRole.Highlight,QtGui.QColor('#287d93' if dark else '#15637a'))
+        palette.setColor(QtGui.QPalette.ColorRole.HighlightedText,QtGui.QColor('#ffffff'))
+        self.setPalette(palette)
         icon = Qt.QStyle.StandardPixmap
         central = Qt.QWidget()
         self.setCentralWidget(central)
         outer = Qt.QVBoxLayout(central)
         outer.setContentsMargins(16, 12, 16, 8)
         outer.setSpacing(10)
+        brand = Qt.QHBoxLayout()
+        name = Qt.QLabel(PUBLIC_NAME)
+        name.setObjectName('brandTitle')
+        brand.addWidget(name)
+        brand.addWidget(Qt.QLabel(tr('Studio di lettura e voci')))
+        brand.addStretch()
+        brand.addWidget(Qt.QLabel(__build_version__))
+        outer.addLayout(brand)
         self.ribbon_tabs = Qt.QTabWidget()
+        self.ribbon_tabs.setDocumentMode(True)
+        self.ribbon_tabs.setMaximumHeight(152)
         outer.addWidget(self.ribbon_tabs)
         file_corner = Qt.QWidget()
         file_layout = Qt.QHBoxLayout(file_corner)
@@ -123,7 +151,35 @@ class EditorViewMixin:
         self.open_markdown_button.setShortcut(QtGui.QKeySequence.StandardKey.Open)
         self.open_markdown_button.setToolTip(tr('Apri un file Markdown (Ctrl+O)'))
         self.ribbon_tabs.setCornerWidget(file_corner)
+        file_page = self.ribbon(tr('&File'))
+        self.files_tab_index = self.ribbon_tabs.count()-1
+        manage=self.group(file_page,tr('Documenti'))
+        management=Qt.QVBoxLayout()
+        manage.addLayout(management)
+        self.file_controls=[self.button(management,tr('Apri documento…'),self.open_markdown,icon.SP_DialogOpenButton,edit=False),
+                            self.button(management,tr('Scegli cartella…'),self.choose_library_folder,edit=False)]
+        self.button(management,tr('Apri cartella'),self.open_document_folder,edit=False)
+        library=Qt.QVBoxLayout()
+        file_page.addLayout(library,1)
+        self.library_path=Qt.QLineEdit(readOnly=True)
+        self.library_path.setPlaceholderText(tr('Scegli una cartella per i documenti.'))
+        self.library_path.setAccessibleName(tr('Cartella dei documenti'))
+        library.addWidget(self.library_path)
+        self.file_listing=Qt.QTreeWidget()
+        self.file_listing.setHeaderLabels([tr('Documento'),tr('Formato')])
+        self.file_listing.setRootIsDecorated(False)
+        self.file_listing.setMinimumWidth(250)
+        self.file_listing.setAccessibleName(tr('File nella cartella'))
+        self.file_listing.itemDoubleClicked.connect(self.open_library_document)
+        self.file_listing.header().setSectionResizeMode(0,Qt.QHeaderView.ResizeMode.Stretch)
+        library.addWidget(self.file_listing)
+        self.file_listing.setToolTip(tr('Doppio clic o Invio per aprire il documento.'))
+        file_open=QtGui.QShortcut(QtGui.QKeySequence('Return'),self.file_listing)
+        file_open.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        file_open.activated.connect(self.open_library_document)
+        self.library_folder=None
         listen = self.ribbon(tr('&Ascolto'))
+        self.listen_tab_index = self.ribbon_tabs.count()-1
         starts = self.group(listen, tr('Avvia lettura'))
         self.button(starts, tr('Ascolta segmento'), self.start, icon.SP_MediaPlay)
         self.button(starts, tr('Leggi da qui'), lambda: self.start(continuous=True), icon.SP_MediaSkipForward)
@@ -151,21 +207,26 @@ class EditorViewMixin:
         listen.addStretch()
 
         voices = self.ribbon(tr('&Voci'))
+        self.voices_tab_index = self.ribbon_tabs.count()-1
         assign_group = self.group(voices, tr('Attribuzione'))
         self.button(assign_group, tr('Assegna'), self.assign, icon.SP_DialogApplyButton)
         self.button(assign_group, tr('Prossima da assegnare'), self.next_pending, icon.SP_ArrowForward)
         casting = self.group(voices, tr('Interpretazione'))
+        cast_stack=Qt.QVBoxLayout()
+        casting.addLayout(cast_stack)
+        cast_row=Qt.QHBoxLayout()
+        cast_stack.addLayout(cast_row)
         mode_label = Qt.QLabel(tr('Modalità &voci'))
         self.voice_mode = Qt.QComboBox()
         self.voice_mode.addItem(tr('Narratore unico'), self.audio.NARRATOR_MODE)
         self.voice_mode.addItem(tr('Cast separato'), self.audio.CAST_MODE)
         self.voice_mode.setToolTip(tr('Usa la voce del Narratore per tutti i ruoli oppure le voci dei singoli profili.'))
         mode_label.setBuddy(self.voice_mode)
-        casting.addWidget(mode_label)
-        casting.addWidget(self.voice_mode)
+        cast_row.addWidget(mode_label)
+        cast_row.addWidget(self.voice_mode)
         self.voice_design = Qt.QCheckBox(tr('VoiceDesign diretto'))
         self.voice_design.setToolTip(tr('Con Narratore unico riusa il campione sintetico. Con Cast separato genera dalla descrizione del profilo Qwen.'))
-        casting.addWidget(self.voice_design)
+        cast_stack.addWidget(self.voice_design)
         self.edit_controls.extend([self.voice_mode, self.voice_design])
         profiles = self.group(voices, tr('Profili e dizione'))
         self.button(profiles, tr('Nuovo profilo…'), lambda: profile_dialog(self, self.profile_created), icon.SP_FileIcon)
@@ -204,10 +265,11 @@ class EditorViewMixin:
         self.edit_controls.extend([self.segment_pause, self.reading_speed])
         split_button = self.button(rhythm, tr('Dividi qui per la lettura'), self.split_here)
         split_button.setToolTip(tr('Posiziona il cursore tra due parole nel testo del segmento.'))
+        directing.addWidget(self.equalizer_panel())
         directing.addStretch()
 
-        settings = self.ribbon(tr('&Lingua'))
-        languages = self.group(settings, tr('Lingue'))
+        settings = self.ribbon(tr('&Impostazioni'))
+        languages = self.group(settings, tr('Interfaccia'))
         form_languages = Qt.QFormLayout()
         languages.addLayout(form_languages)
         self.interface_language = Qt.QComboBox()
@@ -216,12 +278,6 @@ class EditorViewMixin:
         self.interface_language.setCurrentIndex(self.interface_language.findData(current_language()))
         self.interface_language.activated.connect(self.change_interface_language)
         form_languages.addRow(tr('Lingua &interfaccia'), self.interface_language)
-        self.document_language = Qt.QComboBox()
-        for code in DOCUMENT_LANGUAGES:
-            self.document_language.addItem(tr(LANGUAGES[code]), code)
-        self.document_language.activated.connect(self.set_document_language)
-        form_languages.addRow(tr('Lingua &documento'), self.document_language)
-        self.edit_controls.append(self.document_language)
         settings.addStretch()
 
         header = Qt.QHBoxLayout()
@@ -232,6 +288,19 @@ class EditorViewMixin:
         header.addWidget(self.document_title, 1)
         header.addWidget(self.summary)
         outer.addLayout(header)
+        model_row=Qt.QHBoxLayout()
+        model_label=Qt.QLabel(tr('Modello &voce del documento'))
+        self.document_model=Qt.QComboBox()
+        for code,label in MODELS.items(): self.document_model.addItem(tr(label),code)
+        self.document_model.setAccessibleName(tr('Modello voce del documento'))
+        model_label.setBuddy(self.document_model)
+        self.document_model.activated.connect(self.set_document_model)
+        model_row.addWidget(model_label)
+        model_row.addWidget(self.document_model)
+        self.model_status=Qt.QLabel(wordWrap=True)
+        model_row.addWidget(self.model_status,1)
+        outer.addLayout(model_row)
+        self.edit_controls.append(self.document_model)
 
         split = Qt.QSplitter()
         outer.addWidget(split, 1)
@@ -240,7 +309,6 @@ class EditorViewMixin:
         sidebar_layout = Qt.QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         sidebar_layout.addWidget(navigator, 1)
-        sidebar_layout.addWidget(self.equalizer_panel())
         split.addWidget(sidebar)
         self.listing = Qt.QListWidget()
         self.listing.setAccessibleName(tr('Segmenti del manoscritto'))
@@ -318,20 +386,22 @@ class EditorViewMixin:
         body.addLayout(form)
         self.role = Qt.QComboBox()
         self.role.addItems(list(load_profiles()['characters']))
-        self.language = Qt.QComboBox()
-        for code, label in LANGUAGES.items():
-            self.language.addItem(tr('Lingua del documento') if code == 'auto' else tr(label), code)
+        self.segment_model = Qt.QComboBox()
+        self.segment_model.addItem(tr('Modello del documento'),'inherit')
+        for code,label in MODELS.items(): self.segment_model.addItem(tr(label),code)
         form.addRow(tr('&Profilo vocale'), self.role)
-        form.addRow(tr('&Lingua effettiva'), self.language)
+        form.addRow(tr('&Modello voce'), self.segment_model)
         self.language_hint = Qt.QLabel(wordWrap=True)
         form.addRow(self.language_hint)
         self.tones = TonePanel(detail, icon=self.command_icon(icon.SP_FileDialogDetailedView, 'violet'))
-        body.addWidget(self.tones)
-        self.edit_controls.extend([self.listing, self.table, self.role, self.language, self.tones])
+        self.tones.setSizePolicy(Qt.QSizePolicy.Policy.Preferred,Qt.QSizePolicy.Policy.Maximum)
+        actions.addWidget(self.tones)
+        self.edit_controls.extend([self.listing, self.table, self.role, self.segment_model, self.tones])
 
         transport = Qt.QGroupBox(tr('Riproduzione'))
         outer.addWidget(transport)
         transport_layout = Qt.QVBoxLayout(transport)
+        transport_layout.setSpacing(4)
         self.narrator_label = Qt.QLabel(wordWrap=True)
         self.narrator_label.setTextFormat(QtCore.Qt.TextFormat.PlainText)
         transport_layout.addWidget(self.narrator_label)
@@ -353,47 +423,63 @@ class EditorViewMixin:
         controls.addStretch()
         progress = Qt.QGridLayout()
         transport_layout.addLayout(progress)
-        self.gen_label, self.gen_bar = self.progress_row(progress, 0, tr('Elaborazione'))
-        self.read_label, self.read_bar = self.progress_row(progress, 1, tr('Lettura'))
+        self.gen_label, self.gen_bar = self.progress_row(progress, 0, tr('Pronuncia'))
+        self.voice_label, self.voice_bar = self.progress_row(progress, 1, tr('Voce'))
+        self.read_label, self.read_bar = self.progress_row(progress, 2, tr('Ascolto'))
         self.preparation_eta = Qt.QLabel()
         self.reading_eta = Qt.QLabel()
-        progress.addWidget(self.preparation_eta, 2, 0, 1, 2)
-        progress.addWidget(self.reading_eta, 3, 0, 1, 2)
+        self.preparation_eta.setVisible(False)
+        self.reading_eta.setVisible(False)
+        progress.addWidget(self.preparation_eta, 3, 0, 1, 2)
+        progress.addWidget(self.reading_eta, 4, 0, 1, 2)
         self.status = Qt.QLabel(tr('Scegli Apri Markdown… per iniziare.'), wordWrap=True)
         outer.addWidget(self.status)
-        self.setStyleSheet('''
-            QLabel#documentTitle { font-size: 22px; font-weight: 600; }
+        self.setStyleSheet('QWidget { color: '+foreground+'; } '
+                           'QWidget:disabled { color: '+('#87939e' if dark else '#697581')+'; } '+'''
+            QLabel#brandTitle { font-size: 24px; font-weight: 650; }
+            QLabel#documentTitle { font-size: 18px; font-weight: 600; }
             QLabel#segmentTitle { font-weight: 600; }
             QToolButton { padding: 3px 7px; }
+            QToolButton { color: palette(button-text); }
+            QComboBox { color: palette(text); }
             QToolButton:focus { border: 2px solid palette(highlight); border-radius: 4px; }
-            QListWidget, QTreeWidget { selection-background-color: #155689; selection-color: white; }
+            QProgressBar { border: 1px solid palette(mid); border-radius: 3px; background: palette(base); }
+            QProgressBar::chunk { background: palette(highlight); border-radius: 2px; }
+            QTabBar::tab { padding: 7px 16px; }
         ''')
         self.listing.currentRowChanged.connect(self.pick)
         self.role.activated.connect(self.assign)
-        self.language.currentIndexChanged.connect(self.show_language)
+        self.segment_model.activated.connect(self.assign)
         self.tones.changed.connect(self.assign)
         self.voice_mode.currentIndexChanged.connect(self.refresh_segment_audio)
         self.voice_design.toggled.connect(self.refresh_segment_audio)
         self.reading_speed.currentIndexChanged.connect(self.refresh_segment_audio)
         self.refresh_segment_audio()
         self.open_button.setEnabled(False)
+        if self.path is None:
+            self.ribbon_tabs.setCurrentIndex(self.files_tab_index)
 
     def equalizer_panel(self):
         panel = Qt.QGroupBox(tr('Equalizzatore personaggi'))
-        layout = Qt.QFormLayout(panel)
+        layout = Qt.QVBoxLayout(panel)
+        bands=Qt.QHBoxLayout()
+        layout.addLayout(bands)
         self.eq_controls = []
         for name, frequency in BANDS:
             gain = Qt.QSpinBox(minimum=-GAIN_LIMIT, maximum=GAIN_LIMIT, suffix=' dB')
             gain.setToolTip(f'{name} · {frequency} Hz')
-            layout.addRow('&' + name, gain)
+            gain.setAccessibleName(name)
+            field=Qt.QVBoxLayout()
+            field.addWidget(Qt.QLabel(name)); field.addWidget(gain)
+            bands.addLayout(field)
             self.eq_controls.append(gain)
         presets = Qt.QHBoxLayout()
         self.button(presets, tr('Meno metallico'), lambda: self.set_equalizer(SOFT), 'eq-soft', accent='teal')
         self.button(presets, display_tone('Neutro'), lambda: self.set_equalizer(FLAT), 'eq-flat', accent='blue')
         presets.addStretch()
-        layout.addRow(presets)
+        layout.addLayout(presets)
         hint = Qt.QLabel(tr('Si applica al prossimo ascolto o WAV.'), wordWrap=True)
-        layout.addRow(hint)
+        layout.addWidget(hint)
         self.edit_controls.append(panel)
         return panel
 

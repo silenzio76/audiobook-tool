@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0 — 2026-11-14
+
+- Public product name: **will-o'-the-wisp**; internal `audiolibro` modules,
+  settings and saved data remain compatible.
+- Added a separate offline Seed-VC voice-conversion worker between pronunciation
+  and listening, a persistent isolated GPU process, independent progress/caches,
+  cancellation and final-audio-only playback, replay and prepared export.
+- Added document/segment voice-model selectors and a Files tab. Redundant exposed
+  speech-language selectors were removed; underlying pronunciation data remains.
+- Added pinned Python 3.10/CUDA Seed-VC installation requirements and an explicit
+  installer with read-only verification. No automatic model download on startup.
+- Preserved voice-reference/model provenance and validated atomic publication.
+  Naturalness, reference similarity and converted IPA fidelity remain provisional.
+
 ## Unreleased
 
 - Added recoverable publication for matching WAV/MP4 audio and indexes, with

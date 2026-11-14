@@ -1,4 +1,4 @@
-"""Local audiobook review using standard Python and Windows OneCore voices."""
+"""will-o'-the-wisp: local audiobook review, pronunciation and voice conversion."""
 import argparse
 import hashlib
 import io
@@ -163,6 +163,8 @@ def read_plan(path):
     if plan.get('language', 'auto') == 'auto' and source_document_language(plan['source']) == 'ipa-it':
         plan['language'] = 'ipa-it'
     profiles = load_profiles()
+    from voice_conversion import validate_models
+    validate_models(plan)
     for expected, segment in enumerate(plan['segments'], 1):
         if segment.get('id') != expected or not isinstance(segment.get('line'), int) or segment['line'] < 1:
             raise ValueError('Identificativi o righe non validi nel piano.')
@@ -232,7 +234,7 @@ CAST_MODE = "cast"
 
 VOICE_MODES = (NARRATOR_MODE, CAST_MODE)
 
-def render(plan_path, output, selected=None, allow_unassigned=False, cancel_event=None, *, voice_eq=FLAT, voice_mode=NARRATOR_MODE, speed_level=0, reuse_previews=False, voice_design=False):
+def render(plan_path, output, selected=None, allow_unassigned=False, cancel_event=None, *, voice_eq=FLAT, voice_mode=NARRATOR_MODE, speed_level=0, reuse_previews=False, voice_design=False, apply_voice_model=True):
     if type(speed_level) is not int or speed_level not in SPEED_LEVELS:
         raise ValueError('Velocità di lettura sconosciuta')
     if voice_mode not in VOICE_MODES:
@@ -253,6 +255,21 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
     indices = range(len(plan['segments'])) if selected is None else (
         (selected,) if isinstance(selected, int) else selected)
     segments = [plan['segments'][index] for index in indices]
+    from voice_conversion import VoiceStage, segment_model, export_prepared
+    if apply_voice_model and any(segment_model(plan,s)=='seed-vc' for s in segments):
+        indices=list(indices)
+        stage=VoiceStage(plan,voice_mode)
+        try:
+            stage.preflight(indices)
+            clips=[]
+            for index in indices:
+                raw=raw_preview(plan_path,index,cancel_event,voice_mode=voice_mode,
+                                speed_level=speed_level,voice_design=voice_design)
+                final=stage.convert(index,raw,cancel_event)
+                clips.append(filter_preview(plan_path,index,final,voice_eq,cancel_event))
+            return export_prepared(plan_path,clips,output,cancel_event,indices=indices)
+        finally:
+            stage.close()
     with tempfile.TemporaryDirectory(dir=output.parent) as work:
         work = Path(work)
         characters = profiles['characters']
@@ -517,7 +534,7 @@ def raw_preview(path, index, cancel_event=None, *, voice_mode=NARRATOR_MODE, spe
                                                        or timing.get('pause_ms') != plan_pause_ms(plan, segment)):
                     return render(path, target, selected=index, cancel_event=cancel_event,
                                   voice_mode=voice_mode, speed_level=speed_level,
-                                  voice_design=voice_design, reuse_previews=True)
+                                  voice_design=voice_design, reuse_previews=True, apply_voice_model=False)
                 return target
         except (OSError, ValueError, KeyError, IndexError):
             pass
@@ -526,16 +543,28 @@ def raw_preview(path, index, cancel_event=None, *, voice_mode=NARRATOR_MODE, spe
     options = {'speed_level': speed_level} if speed_level else {}
     if voice_design:
         options['voice_design'] = True
-    return render(path, target, selected=index, cancel_event=cancel_event, voice_mode=voice_mode, **options)
+    return render(path, target, selected=index, cancel_event=cancel_event, voice_mode=voice_mode,
+                  apply_voice_model=False, **options)
 
 def preview(path, index, cancel_event=None, *, voice_eq=FLAT, voice_mode=NARRATOR_MODE,
-            speed_level=0, voice_design=False, regenerate=False):
+            speed_level=0, voice_design=False, regenerate=False, apply_voice_model=True, cache_only=False):
     target = raw_preview(path, index, cancel_event, voice_mode=voice_mode, speed_level=speed_level,
-                         voice_design=voice_design, regenerate=regenerate)
+                         voice_design=voice_design, regenerate=regenerate, cache_only=cache_only)
+    if target is None:
+        return None
+    if apply_voice_model:
+        from voice_conversion import VoiceStage
+        stage=VoiceStage(read_plan(path),voice_mode,regenerate=regenerate)
+        try:
+            target=stage.convert(index,target,cancel_event,cache_only=cache_only)
+        finally:
+            stage.close()
+        if target is None:
+            return None
     return filter_preview(path, index, target, voice_eq, cancel_event)
 
 def preview_batch(path, indices, cancel_event, *, voice_eq=FLAT, voice_mode=NARRATOR_MODE,
-                  speed_level=0, voice_design=False):
+                  speed_level=0, voice_design=False, apply_voice_model=True):
     path = Path(path).resolve()
     ready = {index: raw_preview(path, index, cancel_event, voice_mode=voice_mode,
                                 speed_level=speed_level, cache_only=True, voice_design=voice_design) for index in indices}
@@ -544,7 +573,8 @@ def preview_batch(path, indices, cancel_event, *, voice_eq=FLAT, voice_mode=NARR
         with tempfile.TemporaryDirectory(dir=path.parent) as folder:
             combined = Path(folder) / 'batch.wav'
             render(path, combined, selected=missing, cancel_event=cancel_event,
-                   voice_mode=voice_mode, speed_level=speed_level, voice_design=voice_design)
+                   voice_mode=voice_mode, speed_level=speed_level, voice_design=voice_design,
+                   apply_voice_model=False)
             metadata = json.loads(combined.with_suffix('.indice.json').read_text(encoding='utf-8'))
             with wave.open(str(combined), 'rb') as src:
                 for index, timing in zip(missing, metadata['segments'], strict=True):
@@ -569,7 +599,13 @@ def preview_batch(path, indices, cancel_event, *, voice_eq=FLAT, voice_mode=NARR
     for index in set(ready) - set(missing):
         ready[index] = raw_preview(path, index, cancel_event, voice_mode=voice_mode,
                                    speed_level=speed_level, voice_design=voice_design)
-    return [filter_preview(path, index, ready[index], voice_eq, cancel_event) for index in indices]
+    from voice_conversion import VoiceStage
+    stage=VoiceStage(read_plan(path),voice_mode)
+    try:
+        return [filter_preview(path,index,stage.convert(index,ready[index],cancel_event)
+                               if apply_voice_model else ready[index],voice_eq,cancel_event) for index in indices]
+    finally:
+        stage.close()
 
 def filter_preview(path, index, target, voice_eq, cancel_event):
     voice_eq = validate_gains(voice_eq)
@@ -578,8 +614,12 @@ def filter_preview(path, index, target, voice_eq, cancel_event):
     payload = target.read_bytes()
     key = hashlib.sha256(repr((EQ_VERSION, voice_eq)).encode() + payload).hexdigest()[:16]
     filtered = target.with_stem(target.stem + '-eq-' + key)
-    if filtered.is_file():
-        return filtered
+    from audio_publication import publish_audio, recover_audio
+    recover_audio(filtered)
+    if filtered.is_file() and filtered.with_suffix('.indice.json').exists():
+        data=json.loads(filtered.with_suffix('.indice.json').read_text(encoding='utf-8'))
+        if data.get('audio_sha256')==hashlib.sha256(filtered.read_bytes()).hexdigest():
+            return filtered
     output = io.BytesIO()
     with wave.open(io.BytesIO(payload), 'rb') as src, wave.open(output, 'wb') as dest:
         if src.getsampwidth() != 2:
@@ -589,7 +629,12 @@ def filter_preview(path, index, target, voice_eq, cancel_event):
         dest.writeframes(equalize_pcm(frames, src.getframerate(), src.getnchannels(), voice_eq))
     if cancel_event is not None and cancel_event.is_set():
         raise ReadingCancelled('Sintesi interrotta')
-    atomic(filtered, output.getvalue())
+    metadata=json.loads(target.with_suffix('.indice.json').read_text(encoding='utf-8'))
+    metadata['voice_eq']={'version':EQ_VERSION,'gains_db':list(voice_eq)}
+    with tempfile.TemporaryDirectory(dir=target.parent) as temporary:
+        staged=Path(temporary)/'equalized.wav'
+        staged.write_bytes(output.getvalue())
+        publish_audio(staged,filtered,metadata,cancel_event=cancel_event)
     return filtered
 
 def reading_plan(source):

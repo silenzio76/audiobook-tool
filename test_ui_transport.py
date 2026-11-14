@@ -50,6 +50,24 @@ class TransportTests(unittest.TestCase):
         self.hook.stop()
         self.assertEqual(self.callback_errors, [])
 
+    def test_public_brand_models_file_tab_and_three_stage_progress(self):
+        self.window.pipeline=None
+        self.assertIn("will-o'-the-wisp",self.window.windowTitle())
+        self.assertEqual([b.accessibleName() for b in (self.window.gen_bar,self.window.voice_bar,self.window.read_bar)],
+                         ['Pronuncia','Voce','Ascolto'])
+        self.assertIn('File',self.window.ribbon_tabs.tabText(self.window.files_tab_index))
+        self.assertFalse(hasattr(self.window,'document_language'))
+        self.assertFalse(hasattr(self.window,'language'))
+        self.assertEqual(self.window.document_model.count(),2)
+        self.window.plan['segments'][0]['language']='it'
+        audio.save(self.window.path,self.window.plan)
+        self.window.pick(0)
+        self.window.segment_model.setCurrentIndex(self.window.segment_model.findData('source'))
+        self.window.assign()
+        updated=audio.read_plan(self.window.path)
+        self.assertEqual(updated['segments'][0]['language'],'it')
+        self.assertEqual(updated['segments'][0]['voice_model'],'source')
+
     def test_pause_button_and_listen_both_resume_paused_player(self):
         self.window.update_transport()
         self.assertTrue(self.window.pause_button.isEnabled())

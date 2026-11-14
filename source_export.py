@@ -27,6 +27,8 @@ EXPORT_FILES = (
     'editor_view.py', 'editor_preferences.py', 'editor_document.py', 'editor_playback.py',
     'project_storage.py', 'audio_playback.py',
     'ipa_reader.py', 'test_ipa_reader.py',
+    'voice_conversion.py', 'seed_vc_worker.py', 'test_voice_conversion.py',
+    'install_seed_vc.py', 'requirements-seed-vc.txt', 'requirements-seed-vc-torch.txt',
     'test_segment_navigation.py',
     'installa_qwen.py', 'lingue_audio.py', 'montaggio_audio.py',
     'numeri_italiani.py', 'pannelli_voce.py', 'pipeline_audio.py',

@@ -9,6 +9,7 @@
 | Windows WAV synthesis | Core/editor interpreter | Standard library | Windows PowerShell, Italian OneCore voices |
 | Diagnostics / compressed export | Core/editor interpreter | Standard library | FFmpeg 9.0.2 on PATH |
 | Optional Qwen/eSpeak | **3.12 only** | Full pinned requirements-qwen.txt | Windows x64, CUDA GPU, separately acquired models and voice references |
+| Optional Seed-VC voice conversion | **3.10 only** | Separate requirements-seed-vc*.txt locks | Windows x64, CUDA GPU, pinned upstream code and four model components |
 
 Core checks are exercised on Python 3.12 and 3.14; 3.13 is accepted but has not
 been exercised. Qt 6.11.2 is the measured editor baseline. Qwen pins were captured
@@ -17,8 +18,34 @@ baseline, not a hermetic build or certification on all target machines.
 
 Use 64-bit Python. Keep the repository separate from personal audio and manuscripts.
 No voices, models or personal profiles are installed by the commands below.
+The explicit Seed-VC setup command with `--download-models` is the exception
+documented in the section below; ordinary app startup never downloads these models.
 Model downloads are a separate explicit action. Do not copy another person's
 voice resources into this public repository.
+
+## Seed-VC: explicit optional installation
+
+Install 64-bit Python 3.10 and Git first. From this repository:
+
+```text
+py -3.10 install_seed_vc.py --download-models
+py -3.10 install_seed_vc.py --check
+```
+
+Setup keeps its Python environment, upstream checkout and model caches under
+`.runtime/seed-vc`, using pinned code and an exact separate dependency lock.
+PyTorch 2.4.1+cu121 replaces upstream's 2.4.0 because of the Windows binary loading
+regression fixed in that patch. Qwen and Qt environments are preserved. Model
+acquisition is approximately 1.88 GB plus the runtime packages. `--check` does
+not download anything; application startup never installs these resources.
+
+The isolated worker disables network access, verifies model hashes and keeps
+models loaded across conversions. A narrator/character needs a local WAV reference;
+cast groups can use the base model per segment. Select **Seed-VC** in the document
+voice-model selector, or override the model per segment. The Files tab browses
+Markdown and JSON inputs. Playback, replay and export use final validated clips.
+The initial model load can be slow; the UI reports elapsed time without inventing
+a completion percentage. Valid PCM does not certify pronunciation or naturalness.
 
 ## 1. Install core or editor in an isolated environment
 

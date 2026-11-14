@@ -11,6 +11,7 @@ from PySide6 import QtCore, QtWidgets as Qt
 from equalizzatore_voci import FLAT
 from pipeline_audio import AudioPipeline
 from profili_vocali import tone_label
+from voice_conversion import VoiceStage, export_prepared
 
 
 class EditorPlaybackMixin:
@@ -71,7 +72,7 @@ class EditorPlaybackMixin:
     def can_export_prepared(self):
         return (self.busy and not self.exporting and self.junction_work is None
                 and not self.generate_only and not self.pipeline.stop_event.is_set()
-                and self.generated == self.total and not self.audio.pending(self.plan))
+                and self.converted == self.total and not self.audio.pending(self.plan))
 
     def choose_audio_file(self, export):
         source = Path(self.plan['source'])
@@ -111,7 +112,7 @@ class EditorPlaybackMixin:
         segment = self.plan['segments'][index]
         if (self.role.currentText() != segment['role']
                 or self.tones.value() != tone_label(segment.get('tone', 'Neutro'))
-                or self.language.currentData() != segment.get('language', 'auto')):
+                or self.segment_model.currentData() != segment.get('voice_model', 'inherit')):
             if not self.assign():
                 return
         self.refresh_narrator_label()
@@ -141,6 +142,12 @@ class EditorPlaybackMixin:
             if len(issues) > 1:
                 dialog.setDetailedText('\n\n'.join(message for _, message in issues))
             dialog.exec()
+            return
+        voice_stage=VoiceStage(self.plan,self.voice_mode.currentData(),regenerate=regenerate)
+        try:
+            voice_stage.preflight(checked)
+        except (OSError,ValueError,RuntimeError) as error:
+            Qt.QMessageBox.warning(self,tr('Modello voce non pronto'),str(error))
             return
         limit_ms = None
         if continuous and not from_start and not export:
@@ -177,27 +184,16 @@ class EditorPlaybackMixin:
         self.exporting = export
         self.generate_only = generate_only
         self.stopped = False
-        self.generated = self.played = 0
+        self.generated = self.converted = self.played = 0
+        self.conversion_started = None
         self.generation_started = self.transport = None
         gains = tuple(control.value() for control in self.eq_controls)
-        audio_options = {'voice_mode': self.voice_mode.currentData()}
+        audio_options = {'voice_mode': self.voice_mode.currentData(), 'apply_voice_model':False}
         if self.voice_design.isChecked():
             audio_options['voice_design'] = True
         if self.reading_speed.currentData():
             audio_options['speed_level'] = self.reading_speed.currentData()
-        if gains != FLAT:
-            audio_options['voice_eq'] = gains
-        if export:
-            indices = [0]
-
-            def generate(index, cancel):
-                for segment_index in source_indices:
-                    if cancel.is_set():
-                        return None
-                    analyze(segment_index)
-                return self.audio.render(self.path, target, cancel_event=cancel,
-                                         reuse_previews=True, **audio_options)
-        elif junction:
+        if junction:
             self.junction_work = tempfile.TemporaryDirectory()
 
             def generate(index, cancel):
@@ -213,6 +209,15 @@ class EditorPlaybackMixin:
 
         def generate_batch(batch, cancel):
             return self.audio.preview_batch(self.path, batch, cancel, **audio_options)
+
+        def convert_voice(index,source,cancel):
+            if junction:
+                originals=self.audio.preview_batch(self.path,[index,index+1],cancel,**audio_options)
+                converted=[self.audio.filter_preview(self.path,i,voice_stage.convert(i,p,cancel),gains,cancel)
+                           for i,p in zip([index,index+1],originals)]
+                return self.audio.write_junction(Path(self.junction_work.name)/'raccordo-voce.wav',converted,cancel)
+            final=voice_stage.convert(index,source,cancel)
+            return self.audio.filter_preview(self.path,index,final,gains,cancel)
 
         sections = {}
         played_durations = {}
@@ -238,6 +243,13 @@ class EditorPlaybackMixin:
             if sections:
                 return self.audio.save_reading(target, list(sections.values()), self.pipeline.stop_event, limit_ms)
 
+        export_clips=[]
+        def collect_export(clip):
+            export_clips.append(clip)
+
+        def assemble_export():
+            return export_prepared(self.path,export_clips,target,self.pipeline.stop_event)
+
         self.total = len(indices)
         self.reading_indices = tuple(indices)
         self.reading_limit = limit_ms / 1000 if limit_ms is not None else None
@@ -247,10 +259,11 @@ class EditorPlaybackMixin:
         self.session_started = time.monotonic()
         self.preparation_eta.clear()
         self.reading_eta.clear()
-        for bar in (self.gen_bar, self.read_bar):
+        for bar in (self.gen_bar, self.voice_bar, self.read_bar):
             bar.setRange(0, self.total * 100)
             bar.setValue(0)
-        self.gen_label.setText(tr('Elaborazione: 0/{}').format(self.total))
+        self.gen_label.setText(tr('Pronuncia: 0/{}').format(self.total))
+        self.voice_label.setText(tr('Voce: 0/{}').format(self.total))
         if generate_only:
             self.read_label.setText(tr('Lettura: nessuna riproduzione'))
         else:
@@ -263,13 +276,14 @@ class EditorPlaybackMixin:
         if generate_only:
             self.status.setText(tr('Generazione del segmento in corso.'))
         fractional = not export and not quick and self.fractional.isChecked()
-        self.pipeline = AudioPipeline(indices, generate, None if export or generate_only else play_segment, self.events,
+        self.pipeline = AudioPipeline(indices, generate, None if generate_only else collect_export if export else play_segment, self.events,
                                       buffer_size=4, startup_items=1 if limit_ms is not None else 3,
                                       preload_all=preload,
-                                      analyze=None if export else analyze,
+                                      analyze=analyze,
                                       batch_size=4 if fractional else None,
                                       generate_batch=generate_batch if fractional else None,
-                                      on_playback_complete=save_playback if target is not None and not export else None)
+                                      on_playback_complete=assemble_export if export else save_playback if target is not None else None,
+                                      convert=convert_voice,on_conversion_finished=voice_stage.close)
         for control in self.edit_controls:
             if control is not self.listing or export or generate_only:
                 control.setEnabled(False)
@@ -293,12 +307,21 @@ class EditorPlaybackMixin:
             elif kind == 'generated':
                 self.generated = event['position']
                 self.synthesis_times.append(event['synthesis_seconds'])
-                if event['duration'] is not None:
-                    self.actual_durations[event['index']] = event['duration']
                 self.gen_bar.setValue(self.generated * 100)
                 self.generation_started = None
+            elif kind == 'converting':
+                self.conversion_started=event['started']
+                self.status.setText(tr('Voce: preparazione del modello o conversione del segmento {}.').format(event['index']+1))
+            elif kind == 'converted':
+                self.converted=event['position']
+                self.voice_bar.setValue(self.converted*100)
+                self.conversion_started=None
+                if event['duration'] is not None:
+                    self.actual_durations[event['index']]=event['duration']
                 if self.exporting or self.generate_only:
-                    self.last_audio = event['path']
+                    self.last_audio=event['path']
+            elif kind == 'conversion_finished':
+                self.conversion_started=None
             elif kind == 'playing':
                 self.playing_index = event['index']
                 self.replaying_index = None
@@ -308,7 +331,7 @@ class EditorPlaybackMixin:
                     self.last_audio = event['path']
                 if self.follow_playback:
                     self.select_segment(event['index'])
-                self.status.setText(tr('Lettura in corso.') if self.pipeline.producer_done.is_set()
+                self.status.setText(tr('Assemblaggio del file audio…') if self.exporting else tr('Lettura in corso.') if self.pipeline.producer_done.is_set()
                                     else tr('Lettura e vocalizzazione in parallelo.'))
             elif kind == 'saved':
                 self.last_audio = event['path']
@@ -332,7 +355,11 @@ class EditorPlaybackMixin:
         detail = ''
         if self.generation_started is not None:
             detail = tr('  ·  {} s sul segmento corrente').format(int(time.monotonic() - self.generation_started))
-        self.gen_label.setText(tr('Elaborazione: {}/{} pronti').format(self.generated, self.total) + detail)
+        self.gen_label.setText(tr('Pronuncia: {}/{} pronti').format(self.generated, self.total) + detail)
+        voice_detail=''
+        if self.conversion_started is not None:
+            voice_detail=tr('  ·  {} s sul segmento corrente').format(int(time.monotonic()-self.conversion_started))
+        self.voice_label.setText(tr('Voce: {}/{} pronti').format(self.converted,self.total)+voice_detail)
         if self.pipeline.stop_event.is_set():
             self.read_label.setText(tr('Lettura arrestata'))
         elif self.transport:
@@ -347,7 +374,11 @@ class EditorPlaybackMixin:
         elif not self.exporting:
             suffix = tr('  ·  Attendo audio') if self.played < self.total else ''
             self.read_label.setText(tr('Lettura: {}/{} completati').format(self.played, self.total) + suffix)
+        if self.exporting:
+            self.read_label.setText(tr('Ascolto: non previsto · preparazione del file audio'))
         self.update_estimates()
+        self.preparation_eta.setVisible(bool(self.preparation_eta.text()))
+        self.reading_eta.setVisible(bool(self.reading_eta.text()))
         if self.pipeline.finished and self.events.empty():
             self.finish()
         self.update_transport()
@@ -373,7 +404,7 @@ class EditorPlaybackMixin:
 
         if self.pipeline.preload_all:
             if self.generated == self.total:
-                preparation = tr('audio pronto')
+                preparation = tr('pronuncia pronta · attendo la voce') if self.converted<self.total else tr('audio pronto')
             elif generation_remaining is None:
                 preparation = tr('in analisi o in attesa del primo campione')
             else:
@@ -405,11 +436,14 @@ class EditorPlaybackMixin:
         if self.transport:
             audio = max(0, audio - self.transport['elapsed'])
         self.reading_eta.setText(tr('Audio restante: circa {}').format(self.clock(audio + 0.999)))
+        if self.converted<self.total:
+            self.reading_eta.setText(self.reading_eta.text()+tr(' · stima da confermare dopo la conversione'))
+            return
         if generation_remaining is not None:
             if self.pipeline.preload_all:
                 finish = audio + generation_remaining
             else:
-                ready_count = max(0, self.generated - self.played)
+                ready_count = max(0, self.converted - self.played)
                 finish = sum(durations[index] for index in remaining[:ready_count])
                 if self.transport:
                     finish = max(0, finish - self.transport['elapsed'])
@@ -439,6 +473,7 @@ class EditorPlaybackMixin:
             return
         for control in self.edit_controls:
             control.setEnabled(True)
+        self.refresh_model_status()
         self.refresh_segment_audio()
         if self.export_requested and not error:
             self.export_requested = False
@@ -477,6 +512,9 @@ class EditorPlaybackMixin:
             control.setEnabled(active)
         self.stop_button.setEnabled((self.busy or self.auto_timer.isActive()) and not stopping)
         self.open_markdown_button.setEnabled(not self.busy)
+        self.file_listing.setEnabled(not self.busy)
+        for control in self.file_controls:
+            control.setEnabled(not self.busy)
         self.open_button.setEnabled(not self.busy and self.last_audio is not None)
         self.export_button.setEnabled(self.can_export_prepared() if self.busy else self.path is not None)
 
