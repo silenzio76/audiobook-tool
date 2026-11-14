@@ -82,6 +82,41 @@ class TransportTests(unittest.TestCase):
         self.assertFalse(self.window.open_button.isEnabled())
         self.assertIn('reference.wav',self.window.status.text())
 
+    def test_full_file_regeneration_forces_both_stages_for_every_segment(self):
+        self.window.pipeline=None
+        source_calls=[]; converted=[]; flags=[]
+        clip=Path(self.directory.name)/'generated.wav'
+        with wave.open(str(clip),'wb') as stream:
+            stream.setparams((1,2,22050,0,'NONE','not compressed'))
+            stream.writeframes(b'\x10\x00'*2205)
+        class Stage:
+            def __init__(inner,plan,mode,regenerate=False):
+                flags.append(regenerate)
+                inner.statistics={'generated':0,'cached':0,'source':0}
+            def preflight(inner,indices): pass
+            def convert(inner,index,path,cancel):
+                converted.append(index)
+                inner.statistics['generated']+=1
+                return path
+            def close(inner): pass
+        def preview(path,index,**options):
+            source_calls.append((index,options))
+            return clip
+        with patch('editor_playback.VoiceStage',Stage), \
+                patch.object(audio,'preview',side_effect=preview):
+            self.window.regenerate_file_button.click()
+            deadline=time.monotonic()+5
+            while self.window.busy and time.monotonic()<deadline:
+                self.app.processEvents(); self.window.poll(); time.sleep(.005)
+        self.assertFalse(self.window.busy)
+        self.assertEqual(flags,[True])
+        self.assertEqual(converted,[0,1])
+        forced=[(i,o) for i,o in source_calls if o.get('regenerate')]
+        self.assertEqual([i for i,_ in forced],[0,1])
+        self.assertTrue(all(o['apply_voice_model'] is False for _,o in forced))
+        self.assertEqual(self.window.voice_statistics,{'generated':2,'cached':0,'source':0})
+        self.assertIn('2 nuove',self.window.status.text())
+
     def test_pause_button_and_listen_both_resume_paused_player(self):
         self.window.update_transport()
         self.assertTrue(self.window.pause_button.isEnabled())

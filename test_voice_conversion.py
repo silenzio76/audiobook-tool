@@ -111,6 +111,19 @@ class ConversionTests(unittest.TestCase):
         self.assertIsNone(stage.convert(0,self.raw,cache_only=True))
         self.assertEqual(worker.calls,0)
 
+    def test_forced_regeneration_reaches_worker_even_with_identical_output(self):
+        worker=self.worker()
+        normal=VoiceStage(self.plan,worker=worker)
+        first=normal.convert(0,self.raw)
+        normal.convert(0,self.raw)
+        self.assertEqual(normal.statistics,{'generated':1,'cached':1,'source':0})
+        previous=digest(first)
+        forced=VoiceStage(self.plan,worker=worker,regenerate=True)
+        result=forced.convert(0,self.raw)
+        self.assertEqual(worker.calls,2)
+        self.assertEqual(digest(result),previous)
+        self.assertEqual(forced.statistics,{'generated':1,'cached':0,'source':0})
+
     def test_cancel_preserves_source_and_does_not_publish_final(self):
         worker=self.worker()
         stage=VoiceStage(self.plan,worker=worker)

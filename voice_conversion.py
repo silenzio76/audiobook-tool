@@ -181,6 +181,7 @@ class VoiceStage:
         self.worker = worker or SeedWorker(root)
         self.identity = None
         self.regenerate = regenerate
+        self.statistics = {'generated': 0, 'cached': 0, 'source': 0}
 
     def preflight(self, indices):
         for index in indices:
@@ -195,6 +196,7 @@ class VoiceStage:
         source = Path(source)
         segment = self.plan['segments'][index]
         if segment_model(self.plan, segment, self.root) == 'source':
+            self.statistics['source'] += 1
             return source
         self.preflight([index])
         reference = reference_for(self.plan, index, self.voice_mode)
@@ -216,6 +218,7 @@ class VoiceStage:
             try:
                 cached = json.loads(metadata.read_text(encoding='utf-8'))
                 if cached.get('voice_conversion', {}).get('key') == key and cached.get('audio_sha256') == digest(destination):
+                    self.statistics['cached'] += 1
                     return destination
             except (OSError,ValueError):
                 pass
@@ -255,6 +258,7 @@ class VoiceStage:
                       'model_manifest': self.identity['models'], 'source_revision': self.identity['source_revision']}
             publish_audio(assembled, destination, dict(data, duration=(frames+padding)/22050,
                                                        segments=[timing], voice_conversion=record), cancel_event=cancel)
+        self.statistics['generated'] += 1
         return destination
 
     def close(self):

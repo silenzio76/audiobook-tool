@@ -2,6 +2,10 @@
 
 ## 0.2.0 — 2026-11-14
 
+- Added an explicit whole-file regeneration action that bypasses pronunciation
+  and conversion caches. Voice progress and completion now distinguish new
+  conversions, cache hits and base-voice passthrough; ordinary checks/playback
+  continue reusing validated audio.
 - Fixed narrator selection hiding the active reference. Verified recorded WAVs
   now appear with their reference names, duplicate technical roles are collapsed,
   and the current narrator is preselected. The narrator label exposes the actual

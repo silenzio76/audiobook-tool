@@ -16,6 +16,10 @@ from voice_conversion import VoiceStage, export_prepared
 
 class EditorPlaybackMixin:
     """Editor playback responsibilities of the Qt editor."""
+    def regenerate_file(self):
+        self.start(quick=True, continuous=True, from_start=True,
+                   generate_only=True, regenerate=True)
+
     def activate_selected_segment(self):
         if self.busy and self.listing.currentRow() != self.playing_index:
             self.listen_selected_segment()
@@ -144,6 +148,7 @@ class EditorPlaybackMixin:
             dialog.exec()
             return
         voice_stage=VoiceStage(self.plan,self.voice_mode.currentData(),regenerate=regenerate)
+        self.voice_statistics = voice_stage.statistics
         try:
             voice_stage.preflight(checked)
         except (OSError,ValueError,RuntimeError) as error:
@@ -275,6 +280,8 @@ class EditorPlaybackMixin:
         self.status.setText(message)
         if generate_only:
             self.status.setText(tr('Generazione del segmento in corso.'))
+        if regenerate:
+            self.status.setText(tr('Rigenerazione di {} segmenti: cache ignorata.').format(self.total))
         fractional = not export and not quick and self.fractional.isChecked()
         self.pipeline = AudioPipeline(indices, generate, None if generate_only else collect_export if export else play_segment, self.events,
                                       buffer_size=4, startup_items=1 if limit_ms is not None else 3,
@@ -359,7 +366,9 @@ class EditorPlaybackMixin:
         voice_detail=''
         if self.conversion_started is not None:
             voice_detail=tr('  ·  {} s sul segmento corrente').format(int(time.monotonic()-self.conversion_started))
-        self.voice_label.setText(tr('Voce: {}/{} pronti').format(self.converted,self.total)+voice_detail)
+        stats = self.voice_statistics
+        self.voice_label.setText(tr('Voce: {}/{} · nuove {} · cache {} · base {}').format(
+            self.converted,self.total,stats['generated'],stats['cached'],stats['source'])+voice_detail)
         if self.pipeline.stop_event.is_set():
             self.read_label.setText(tr('Lettura arrestata'))
         elif self.transport:
@@ -491,6 +500,10 @@ class EditorPlaybackMixin:
                 self.reading_eta.setText(tr('Lettura terminata in {}').format(self.clock(time.monotonic() - self.session_started)))
             self.status.setText(tr('Raccordo ascoltato.') if junction
                                 else tr('Completato. Audio: {}').format(self.last_audio))
+            stats = self.voice_statistics
+            self.status.setText(self.status.text() + '\n' + tr(
+                'Conversioni vocali: {} nuove · {} da cache · {} senza conversione.').format(
+                    stats['generated'], stats['cached'], stats['source']))
 
     def update_transport(self):
         self.update_play_shortcut()

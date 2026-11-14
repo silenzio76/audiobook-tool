@@ -21,6 +21,14 @@ def display_tone(name):
 
 
 ENGLISH = {
+    'Rielaborazione': 'Reprocessing',
+    'Rigenera tutto il file': 'Regenerate the entire file',
+    'Rigenera pronuncia e voce di tutti i segmenti, ignorando la cache. Non avvia la riproduzione.':
+        'Regenerate pronunciation and voice for every segment, bypassing the cache. Does not start playback.',
+    'Rigenerazione di {} segmenti: cache ignorata.': 'Regenerating {} segments: cache bypassed.',
+    'Voce: {}/{} · nuove {} · cache {} · base {}': 'Voice: {}/{} · new {} · cached {} · base {}',
+    'Conversioni vocali: {} nuove · {} da cache · {} senza conversione.':
+        'Voice conversions: {} new · {} cached · {} without conversion.',
     'Importa prima un riferimento vocale WAV.': 'Import a WAV voice reference first.',
     'Riferimento WAV da usare come voce base': 'WAV reference to use as the base voice',
     'Riferimento del Narratore: {}': 'Narrator reference: {}',
