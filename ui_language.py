@@ -21,6 +21,7 @@ def display_tone(name):
 
 
 ENGLISH = {
+    'IPA — Multilingue (voce eSpeak NG)': 'IPA — Multilingual (eSpeak NG voice)',
     'Armeno': 'Armenian',
     'Pronunce da verificare': 'Pronunciations to review',
     '{} segmenti richiedono una correzione prima della sintesi.': '{} segments need a correction before synthesis.',

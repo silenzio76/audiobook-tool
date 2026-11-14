@@ -89,18 +89,33 @@ change voice assignments, and playback does not steal the selected row. Segments
 not ready yet show a status message. Replay clips are excluded from the saved
 reading and from its timed-reading budget.
 
-Select **IPA — Italiano (voce eSpeak NG)** as the document or segment language in
-the editor. Saved plans use `language: "ipa-it"`. Input is broad Italian IPA,
+Select **IPA — Multilingue (voce eSpeak NG)** as the document or segment language in
+the editor. Saved plans keep the compatible code `language: "ipa-it"`. Input is IPA,
 optionally enclosed in `/.../` or `[...]`; for example `/ˈpɛska/` versus `/ˈpeska/`.
 The explicit converter preserves stress, vowel quality, affricates, consonant
 doubling and `ː` length. Unknown symbols and unsupported diacritics fail explicitly.
 This mode uses eSpeak NG phoneme input (`[[...]]`) in the isolated synthesis
 runtime, not Qwen text interpretation or the immersive narrator's cloned timbre.
 It requires the installed Qwen-profile runtime packages, but no Qwen model or GPU
-for IPA-only jobs. Leave direct VoiceDesign disabled. This is an Italian inventory,
-not a universal IPA implementation; other languages need their own mappings.
+for IPA-only jobs. Leave direct VoiceDesign disabled.
+
+The supported inventory includes Italian vowels/consonants and the additional
+phones `ʁ ħ ʕ ð θ h s̪ ʔ ɹ x χ ɣ`. Trill `r`, tap `ɾ` and approximant `ɹ` remain
+distinct. The converter selects the Arabic phoneme table for words containing
+`ħ`, `ʕ` or `s̪`, using generated SSML voice spans with explicit phoneme input.
+Other words use the Italian/base table. This is resource selection from the
+supplied phonemes, not language detection or historical pronunciation inference.
+An Arabic-resource word containing `ɛ`, `ɔ` or `ɣ` is rejected because those
+definitions are unavailable or different in that table. Other unlisted symbols
+and diacritics remain explicit errors; this is not the whole IPA inventory.
+The language-policy version invalidates old cached audio after this mapping change.
+Voice spans may change timbre/prosody; native phoneme-event and PCM tests check
+technical delivery, not specialist listening acceptance.
 IPA conversion does not automatically transcribe orthographic manuscripts.
 Implementation reference: [eSpeak NG phoneme documentation](https://github.com/espeak-ng/espeak-ng/blob/master/docs/phonemes.md).
+Table definitions: [base phones](https://github.com/espeak-ng/espeak-ng/blob/master/phsource/phonemes)
+and [Arabic phones](https://github.com/espeak-ng/espeak-ng/blob/master/phsource/ph_arabic).
+The engine must support the documented [SSML voice spans](https://github.com/espeak-ng/espeak-ng/blob/master/docs/markup.md).
 
 ### Code organization
 

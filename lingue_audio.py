@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from numeri_italiani import spoken_it
 
-VERSION='multilingue-4-ipa-it'
+VERSION='multilingue-5-ipa-extended'
 LEXICON=Path(__file__).with_name('pronunce.json')
 LANGUAGES={'auto':'Automatico', 'it':'Italiano', 'el':'Greco moderno', 'ar':'Arabo',
            'en':'Inglese','fr':'Francese','de':'Tedesco','es':'Spagnolo','pt':'Portoghese','ru':'Russo','la':'Latino',
@@ -14,7 +14,8 @@ QWEN={'it':'Italian','en':'English','fr':'French','de':'German','es':'Spanish','
 SCRIPT=re.compile(r'[\u0370-\u03ff\u1f00-\u1fff]+(?:[\s,;·]+[\u0370-\u03ff\u1f00-\u1fff]+)*|[\u0600-\u06ff]+(?:[\s,;]+[\u0600-\u06ff]+)*')
 
 
-LANGUAGES['ipa-it'] = 'IPA — Italiano (voce eSpeak NG)'
+# Retain the stored code for compatibility with existing plans and overrides.
+LANGUAGES['ipa-it'] = 'IPA — Multilingue (voce eSpeak NG)'
 DOCUMENT_LANGUAGES = ('auto', 'it', 'en', 'ipa-it')
 
 
