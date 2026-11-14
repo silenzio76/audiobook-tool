@@ -21,6 +21,9 @@ def display_tone(name):
 
 
 ENGLISH = {
+    'Qwen diretto · preset A/B':'Direct Qwen · A/B preset',
+    'Qwen diretto · preset originale · dizione da verificare':'Direct Qwen · original preset · pronunciation pending review',
+    'Qwen diretto: {} nuove · {} da cache':'Direct Qwen: {} new · {} cached',
     'Rielaborazione': 'Reprocessing',
     'Rigenera tutto il file': 'Regenerate the entire file',
     'Rigenera pronuncia e voce di tutti i segmenti, ignorando la cache. Non avvia la riproduzione.':

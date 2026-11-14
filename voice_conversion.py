@@ -15,7 +15,8 @@ import wave
 from pipeline_audio import ReadingCancelled
 
 HERE = Path(__file__).resolve().parent
-MODELS = {'seed-vc': 'Seed-VC · conversione vocale', 'source': 'Qwen / eSpeak · voce di base'}
+MODELS = {'qwen-direct':'Qwen diretto · preset A/B',
+          'seed-vc': 'Seed-VC · conversione vocale', 'source': 'Qwen / eSpeak · voce di base'}
 CONVERSION_VERSION = 'seed-vc-stage-1'
 # Prefer the documented offline quality range over the faster 25-step baseline.
 # This refines conversion; it does not certify natural prosody or IPA fidelity.
@@ -185,6 +186,12 @@ class VoiceStage:
 
     def preflight(self, indices):
         for index in indices:
+            if segment_model(self.plan,self.plan['segments'][index],self.root)=='qwen-direct':
+                from direct_neural import recipe,operational_input
+                from profili_vocali import load
+                role='Narratore' if self.voice_mode=='narratore' else self.plan['segments'][index]['role']
+                recipe(load()['characters'][role].get('reference',''))
+                operational_input(self.plan,self.plan['segments'][index])
             if segment_model(self.plan, self.plan['segments'][index], self.root) == 'seed-vc':
                 if self.identity is None:
                     self.identity = installation_identity(self.root)
@@ -195,7 +202,7 @@ class VoiceStage:
         from audiolibro import plan_pause_ms
         source = Path(source)
         segment = self.plan['segments'][index]
-        if segment_model(self.plan, segment, self.root) == 'source':
+        if segment_model(self.plan, segment, self.root) in ('source','qwen-direct'):
             self.statistics['source'] += 1
             return source
         self.preflight([index])
@@ -300,8 +307,12 @@ def export_prepared(path, clips, output, cancel=None, *, indices=None):
                     raise ValueError('Pronuncia cambiata: rigenerare prima di esportare.')
                 if segment_model(plan,segment)=='seed-vc' and not data.get('voice_conversion'):
                     raise ValueError('Conversione vocale mancante: esportazione arrestata.')
-                if segment_model(plan,segment)=='source' and data.get('voice_conversion'):
+                if segment_model(plan,segment) in ('source','qwen-direct') and data.get('voice_conversion'):
                     raise ValueError('Modello voce cambiato: rigenerare prima di esportare.')
+                if segment_model(plan,segment)=='qwen-direct':
+                    traces=data.get('backends',{}).get('qwen3',{}).get('direct_neural',[])
+                    if not any(t.get('segment_id')==segment['id'] for t in traces):
+                        raise ValueError('Prova di sintesi Qwen diretta mancante: rigenerare prima di esportare.')
                 timing=dict(data['segments'][0])
                 if timing['id']!=segment['id'] or timing['audio_key']!=audio.segment_audio_key(plan,segment):
                     raise ValueError('Segmenti non corrispondenti: esportazione arrestata.')

@@ -170,6 +170,34 @@ def clone_chunks(engine, prompt, path, text, language, splits_left=3, *, embeddi
     yield audio[0], sr
 
 
+def direct_clone_chunks(engine,prompts,job,text,language,revision):
+    """Reproduce a saved direct preset without native fallback or recursive cloning."""
+    import torch
+    import numpy as np
+    import soundfile as sf
+    item=job['direct_neural']
+    if revision!=item['revision'] or item['model']!=BASE:
+        raise ValueError('Revisione Qwen diversa dal preset approvato.')
+    metadata,wav=reference(item['reference'])
+    if metadata['audio_sha256']!=item['reference_audio_sha256']:
+        raise ValueError('Il riferimento originale del preset è cambiato.')
+    key=('direct',json.dumps(item,sort_keys=True))
+    if key not in prompts:
+        samples,rate=sf.read(wav,dtype='float32')
+        torch.manual_seed(item['seed'])
+        prompts[key]=engine.create_voice_clone_prompt(
+            ref_audio=(samples,rate),ref_text=item['transcript'] or None,
+            x_vector_only_mode=item['embedding_only'])
+    torch.manual_seed(item['seed'])
+    waves,rate=engine.generate_voice_clone(text=text,language=language,
+                                          voice_clone_prompt=prompts[key],**item['settings'])
+    samples=np.asarray(waves[0],dtype=np.float32)
+    if (samples.ndim!=1 or not samples.size or not np.isfinite(samples).all()
+            or not 1<=len(samples)/rate<=max(50,len(text.split())/1.3)):
+        raise ValueError('Qwen diretto: audio o durata non validi.')
+    yield samples,rate
+
+
 def voice_design_chunks(engine, instruction, text, language, splits_left=3):
     import torch
 
@@ -250,7 +278,7 @@ def synthesize(job_file):
                 parts = [{'text': text, 'language': 'auto'}]
             for part in parts:
                 language=part['language']
-                for text in ([part['text']] if language == 'ipa-it' else split_text(part['text'])):
+                for text in ([part['text']] if language == 'ipa-it' or job.get('direct_neural') else split_text(part['text'])):
                     if part.get('audio'):
                         import soundfile as sf
                         samples,sr=sf.read(part['audio'],dtype='float32')
@@ -266,7 +294,9 @@ def synthesize(job_file):
                         if engine is None:
                             engine, revision = model(repo)
                         model_language = QWEN.get(language, 'Auto')
-                        if direct:
+                        if job.get('direct_neural'):
+                            generated=direct_clone_chunks(engine,prompts,job,text,model_language,revision)
+                        elif direct:
                             generated = voice_design_chunks(engine, instruction, text, model_language)
                         else:
                             embedding_only = job.get('speaker_embedding_only', False)
@@ -317,6 +347,8 @@ def synthesize(job_file):
     from audiolibro import save
     save(Path(job_file).with_suffix('.backend.json'), {'model': repo if engine is not None else 'eSpeak NG', 'revision': revision,
          'language': 'per-fragment', 'mode': 'local-offline-voice-design' if direct else 'local-offline-synthetic-reference',
+         'direct_neural':[{'segment_id':item.get('segment_id'),**item['direct_neural']}
+                          for item in jobs if item.get('direct_neural')],
          'speech_normalization': SPEECH_VERSION})
 
 

@@ -2,6 +2,11 @@
 
 ## 0.2.0 — 2026-11-14
 
+- Connected direct Qwen A/B presets to preview, playback and export. Presets use
+  original conditioning/settings rather than recursively cloning imported
+  synthetic WAVs. IPA test files require hash-bound orthographic counterparts;
+  missing/stale mappings fail explicitly. Direct synthesis bypasses eSpeak and
+  Seed-VC; caches include route, text mapping and original recipe identities.
 - Added an explicit whole-file regeneration action that bypasses pronunciation
   and conversion caches. Voice progress and completion now distinguish new
   conversions, cache hits and base-voice passthrough; ordinary checks/playback

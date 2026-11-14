@@ -125,11 +125,21 @@ def segment_pause_ms(segment, following=None):
     return 150
 
 def segment_speech_parts(plan, segment):
+    from voice_conversion import segment_model
+    if segment_model(plan,segment)=='qwen-direct':
+        from direct_neural import operational_input
+        return operational_input(plan,segment)[0]
     return speech_parts(segment.get('spoken_text', segment['text']), segment_language(plan, segment))
 
 def segment_audio_key(plan, segment, *, legacy=False):
     fields = {key: segment.get(key) for key in ('id', 'text', 'spoken_text', 'role', 'tone')}
     fields['language'] = segment_language(plan, segment)
+    if not legacy:
+        from voice_conversion import segment_model
+        fields['voice_model']=segment_model(plan,segment)
+        if fields['voice_model']=='qwen-direct':
+            from direct_neural import operational_input
+            fields['operational_text']=operational_input(plan,segment)
     if legacy:
         fields['pause_ms'] = segment_pause_ms(segment)
     return hashlib.sha256(json.dumps(fields, sort_keys=True).encode()).hexdigest()
@@ -194,6 +204,9 @@ def reference_hashes(profiles):
             data, audio = qwen_reference(path)
             result[str(path)] = {'metadata': hashlib.sha256(path.read_bytes()).hexdigest(),
                                  'audio': data['audio_sha256']}
+            if data.get('original_generation_recipe'):
+                from direct_neural import recipe
+                result[str(path)]['direct_recipe']=recipe(path)
     return result
 
 def run_backend(command, work, engine, cancel_event=None):
@@ -288,7 +301,7 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
             delivery_role = 'Narratore' if voice_mode == NARRATOR_MODE and role == 'Da assegnare' else role
             _, rate, pitch = resolve_voice(profiles, delivery_role, tone)
             engine = base.get('engine', 'windows')
-            if all(part['language'] == 'ipa-it' for part in parts):
+            if all(part['language'] == 'ipa-it' for part in parts) or segment_model(plan,segment)=='qwen-direct':
                 engine = 'qwen3'
             if voice_design and engine != 'qwen3':
                 raise ValueError('VoiceDesign diretto richiede un profilo sintetico Qwen: ' + role)
@@ -303,6 +316,14 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
                    'segment_id': segment['id'], 'source_line': segment['line']}
             if engine == 'qwen3':
                 job['reference'] = base.get('reference', '')
+                if segment_model(plan,segment)=='qwen-direct':
+                    if voice_design:
+                        raise ValueError('Qwen diretto usa il preset salvato; disattivare VoiceDesign.')
+                    from direct_neural import recipe
+                    job['direct_neural']=recipe(base.get('reference',''))
+                    job['character_pitch']=0
+                    if speed_level: job['reading_speed']=1+.10*speed_level
+                    return job
                 if speed_level:
                     job['reading_speed'] = 1 + .10 * speed_level
                 if voice_design:
@@ -333,6 +354,7 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
         parts_by_id = {
             seg['id']: segment_speech_parts(plan, seg) for seg in segments
         }
+        keys_by_id={seg['id']:segment_audio_key(plan,seg) for seg in segments}
         jobs, synthesis_jobs, groups = [], [], []
         cached_pauses = {}
         for n, seg in enumerate(segments):
@@ -423,7 +445,7 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
                     count = len(frames) // (fmt[0] * fmt[1]) + pause
                     timings.append({'id': seg['id'], 'line': seg['line'], 'role': seg['role'],
                                     'tone': seg.get('tone', 'Neutro'), 'seconds': round(elapsed, 3),
-                                    'frames': count, 'audio_key': segment_audio_key(plan, seg),
+                                    'frames': count, 'audio_key': keys_by_id[seg['id']],
                                     'pause_ms': pause_ms, **mounting})
                     if len(timings) > 1:
                         flag_level_jump(timings[-2], timings[-1])
@@ -442,6 +464,8 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
             raise ValueError('Profili vocali cambiati durante la sintesi: rigenerare l’audio.')
         if reference_hashes(profiles) != references:
             raise ValueError('Campioni vocali cambiati durante la sintesi: rigenerare l’audio.')
+        if any(segment_audio_key(plan,s)!=keys_by_id[s['id']] for s in segments):
+            raise ValueError('Testo operativo cambiato durante la sintesi: rigenerare l’audio.')
         if output.suffix.lower() == '.mp4':
             from converti_audio import convert
             published_audio = work / 'complete.mp4'

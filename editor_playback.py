@@ -11,7 +11,7 @@ from PySide6 import QtCore, QtWidgets as Qt
 from equalizzatore_voci import FLAT
 from pipeline_audio import AudioPipeline
 from profili_vocali import tone_label
-from voice_conversion import VoiceStage, export_prepared
+from voice_conversion import VoiceStage, export_prepared, segment_model
 
 
 class EditorPlaybackMixin:
@@ -149,6 +149,7 @@ class EditorPlaybackMixin:
             return
         voice_stage=VoiceStage(self.plan,self.voice_mode.currentData(),regenerate=regenerate)
         self.voice_statistics = voice_stage.statistics
+        self.direct_statistics = {'generated':0,'cached':0}
         try:
             voice_stage.preflight(checked)
         except (OSError,ValueError,RuntimeError) as error:
@@ -210,9 +211,20 @@ class EditorPlaybackMixin:
                 options = dict(audio_options)
                 if regenerate:
                     options['regenerate'] = True
-                return self.audio.preview(self.path, index, cancel_event=cancel, **options)
+                direct=segment_model(self.plan,self.plan['segments'][index])=='qwen-direct'
+                cached=None
+                if direct and not regenerate:
+                    cached=self.audio.preview(self.path,index,cancel_event=cancel,cache_only=True,**audio_options)
+                if cached is not None:
+                    self.direct_statistics['cached']+=1
+                    return cached
+                result=self.audio.preview(self.path, index, cancel_event=cancel, **options)
+                if direct: self.direct_statistics['generated']+=1
+                return result
 
         def generate_batch(batch, cancel):
+            if any(segment_model(self.plan,self.plan['segments'][i])=='qwen-direct' for i in batch):
+                return [generate(i,cancel) for i in batch]
             return self.audio.preview_batch(self.path, batch, cancel, **audio_options)
 
         def convert_voice(index,source,cancel):
@@ -369,6 +381,10 @@ class EditorPlaybackMixin:
         stats = self.voice_statistics
         self.voice_label.setText(tr('Voce: {}/{} · nuove {} · cache {} · base {}').format(
             self.converted,self.total,stats['generated'],stats['cached'],stats['source'])+voice_detail)
+        direct=self.direct_statistics
+        if direct['generated'] or direct['cached']:
+            self.voice_label.setText(tr('Qwen diretto: {} nuove · {} da cache').format(
+                direct['generated'],direct['cached'])+voice_detail)
         if self.pipeline.stop_event.is_set():
             self.read_label.setText(tr('Lettura arrestata'))
         elif self.transport:
@@ -504,6 +520,10 @@ class EditorPlaybackMixin:
             self.status.setText(self.status.text() + '\n' + tr(
                 'Conversioni vocali: {} nuove · {} da cache · {} senza conversione.').format(
                     stats['generated'], stats['cached'], stats['source']))
+            direct=self.direct_statistics
+            if direct['generated'] or direct['cached']:
+                self.status.setText(tr('Qwen diretto: {} nuove · {} da cache').format(
+                    direct['generated'],direct['cached'])+'\n'+tr('Completato. Audio: {}').format(self.last_audio))
 
     def update_transport(self):
         self.update_play_shortcut()

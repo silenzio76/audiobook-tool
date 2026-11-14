@@ -75,8 +75,9 @@ class EditorDocumentMixin:
         selected=document_model(self.plan)
         self.model_status.setText(tr('Seed-VC locale · qualità in valutazione') if selected=='seed-vc' and installed()
                                  else tr('Seed-VC non installato') if selected=='seed-vc'
+                                 else tr('Qwen diretto · preset originale · dizione da verificare') if selected=='qwen-direct'
                                  else tr('Sintesi diretta · formato del testo rilevato automaticamente'))
-        if selected=='seed-vc':
+        if selected in ('seed-vc','qwen-direct'):
             self.voice_design.setChecked(False)
         self.voice_design.setEnabled(not self.busy and selected=='source')
 
@@ -278,8 +279,8 @@ class EditorDocumentMixin:
         try:
             segment = self.plan['segments'][index]
             selected = segment_language(self.plan,segment)
-            parts = speech_parts(segment.get('spoken_text', segment['text']), selected)
             model=segment_model(self.plan,dict(segment,voice_model=self.segment_model.currentData() or 'inherit'))
+            self.audio.segment_speech_parts(self.plan,dict(segment,voice_model=self.segment_model.currentData() or 'inherit'))
             self.language_hint.setText(tr('Genere profilo: {} · Modello: {}').format(gender,tr(MODELS[model])))
         except ValueError as error:
             self.language_hint.setText(str(error))

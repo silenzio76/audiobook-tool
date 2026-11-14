@@ -58,7 +58,7 @@ class TransportTests(unittest.TestCase):
         self.assertIn('File',self.window.ribbon_tabs.tabText(self.window.files_tab_index))
         self.assertFalse(hasattr(self.window,'document_language'))
         self.assertFalse(hasattr(self.window,'language'))
-        self.assertEqual(self.window.document_model.count(),2)
+        self.assertEqual(self.window.document_model.count(),3)
         self.window.plan['segments'][0]['language']='it'
         audio.save(self.window.path,self.window.plan)
         self.window.pick(0)

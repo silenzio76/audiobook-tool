@@ -28,6 +28,7 @@ EXPORT_FILES = (
     'project_storage.py', 'audio_playback.py',
     'ipa_reader.py', 'test_ipa_reader.py',
     'voice_conversion.py', 'seed_vc_worker.py', 'test_voice_conversion.py',
+    'direct_neural.py', 'test_direct_neural.py',
     'install_seed_vc.py', 'requirements-seed-vc.txt', 'requirements-seed-vc-torch.txt',
     'test_segment_navigation.py',
     'installa_qwen.py', 'lingue_audio.py', 'montaggio_audio.py',

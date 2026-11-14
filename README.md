@@ -1,5 +1,21 @@
 # will-o'-the-wisp
 
+## Direct Qwen listening presets
+
+The `qwen-direct` model uses a saved original generation recipe rather than
+cloning an imported synthetic sample again. Profiles must carry the original
+reference, model revision, sampling settings and conditioning mode. A/B choices
+remain ordinary narrator references in the Voices tab.
+
+For an IPA document, direct synthesis requires a matching `.fonetica.json`
+report with `ipa_sha256` and per-sample `index`, `ipa`, `spoken_text`,
+`spoken_sha256`, `source` and `source_sha256`. The IPA remains the pronunciation
+reference; separate orthographic text supplies the diagnostic neural input.
+Missing or stale mappings stop the run instead of sending IPA as ordinary text.
+Naturalness approval does not certify phonetic fidelity, especially foreign names.
+Direct presets bypass eSpeak, voice-design instructions and Seed-VC. Playback,
+cache reuse, forced regeneration and export retain the model/input provenance.
+
 The public product name is **will-o'-the-wisp**. Python modules, saved-plan IDs,
 settings and CLI entry points retain the internal name `audiolibro`.
 

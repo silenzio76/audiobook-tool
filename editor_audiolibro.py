@@ -33,6 +33,7 @@ class Editor(EditorViewMixin, EditorPreferencesMixin, EditorDocumentMixin, Edito
         self.generated = self.converted = self.played = self.position = self.total = 0
         self.conversion_started = None
         self.voice_statistics = {'generated': 0, 'cached': 0, 'source': 0}
+        self.direct_statistics = {'generated':0,'cached':0}
         self.edit_controls = []
         self.icons = {}
         self.setWindowTitle(PUBLIC_NAME)
