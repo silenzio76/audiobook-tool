@@ -266,7 +266,7 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
 
         design_instructions = {}
 
-        def voice_job(role, tone, parts, destination):
+        def voice_job(role, tone, parts, destination, segment):
             base = narrator if voice_mode == NARRATOR_MODE else characters[role]
             delivery_role = 'Narratore' if voice_mode == NARRATOR_MODE and role == 'Da assegnare' else role
             _, rate, pitch = resolve_voice(profiles, delivery_role, tone)
@@ -282,7 +282,8 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
             job = {'token': 'MSTTS_V110_itIT_' + base['voice'], 'rate': rate, 'pitch': pitch,
                    'text': ''.join(part['text'] for part in parts), 'parts': parts,
                    'gender': base.get('gender', 'non_specificato'), 'output': str(destination),
-                   'engine': engine, 'tone': tone}
+                   'engine': engine, 'tone': tone,
+                   'segment_id': segment['id'], 'source_line': segment['line']}
             if engine == 'qwen3':
                 job['reference'] = base.get('reference', '')
                 if speed_level:
@@ -335,12 +336,12 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
             jobs.append(destination)
             profile = characters[role]
             if fixed_design_voice or profile.get('kind') != 'gruppo':
-                synthesis_jobs.append(voice_job(role, tone, parts, destination))
+                synthesis_jobs.append(voice_job(role, tone, parts, destination, seg))
                 continue
             members = []
             for i, name in enumerate(profile['members']):
                 member_output = destination.with_stem(f'{destination.stem}_voce{i}')
-                synthesis_jobs.append(voice_job(name, tone, parts, member_output))
+                synthesis_jobs.append(voice_job(name, tone, parts, member_output, seg))
                 members.append(str(member_output))
             groups.append((members, str(destination)))
         backend_reports = {}

@@ -127,6 +127,13 @@ Table definitions: [base phones](https://github.com/espeak-ng/espeak-ng/blob/mas
 and [Arabic phones](https://github.com/espeak-ng/espeak-ng/blob/master/phsource/ph_arabic).
 The engine must support the documented [SSML voice spans](https://github.com/espeak-ng/espeak-ng/blob/master/docs/markup.md).
 
+Native synthesis owns one initialized engine and a live callback per backend
+process. Calls are serialized. Empty or silent native output triggers exactly
+one retry after terminating and recreating the engine with identical input and
+delivery settings. Persistent silence is an error; it is never published as
+valid audio or replaced by an orthographic guess. Backend errors include the
+source segment ID and line. The final audio writer retains its silence check.
+
 ### Code organization
 
 `audiolibro.py` retains the CLI and the synthesis/preview coordination entry points.

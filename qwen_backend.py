@@ -258,7 +258,10 @@ def synthesize(job_file):
                     elif language != 'auto' and language not in QWEN:
                         from sintesi_lingue import synthesize_native
                         options = {'ipa_delivery': job.get('ipa_delivery', {})} if language == 'ipa-it' else {}
-                        samples,sr=synthesize_native(text,language,job.get('gender','non_specificato'), **options)
+                        try:
+                            samples,sr=synthesize_native(text,language,job.get('gender','non_specificato'), **options)
+                        except (ValueError, RuntimeError) as error:
+                            raise RuntimeError(f"Segmento {job.get('segment_id', '?')} · riga {job.get('source_line', '?')}: {error}") from error
                     else:
                         if engine is None:
                             engine, revision = model(repo)
@@ -306,7 +309,10 @@ def synthesize(job_file):
         if peak>.98: result=result*(.98/peak)
         divisor = math.gcd(sr, 22050)
         result = resample_poly(result, 22050 // divisor, sr // divisor)
-        write_audio(job['output'], result, 22050)
+        try:
+            write_audio(job['output'], result, 22050)
+        except ValueError as error:
+            raise ValueError(f"Segmento {job.get('segment_id', '?')} · riga {job.get('source_line', '?')}: {error}") from error
         print('Sintetizzato segmento Qwen', flush=True)
     from audiolibro import save
     save(Path(job_file).with_suffix('.backend.json'), {'model': repo if engine is not None else 'eSpeak NG', 'revision': revision,

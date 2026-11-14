@@ -72,6 +72,8 @@ class IPATests(unittest.TestCase):
             job = ready.call_args.args[1][0]
             self.assertEqual(job['parts'], [{'text':'/ˈpɛska/', 'language':'ipa-it'}])
             self.assertEqual(job['character_pitch'], 0)
+            self.assertEqual(job['segment_id'], 1)
+            self.assertEqual(job['source_line'], 1)
             self.assertEqual(job['ipa_delivery'], profiles['characters']['Narratore']['ipa_delivery'])
 
     def test_vowel_quality_and_stress(self):
@@ -100,9 +102,9 @@ class IPATests(unittest.TestCase):
 
     def test_new_ipa_policy_invalidates_previous_audio(self):
         current = audio.language_policy()
-        self.assertTrue(current.startswith('multilingue-6-ipa-delivery:'))
+        self.assertTrue(current.startswith('multilingue-7-native-session:'))
         self.assertFalse(audio.cached_pronunciation_matches(
-            {'language_policy': current.replace('multilingue-6-ipa-delivery', 'multilingue-5-ipa-extended')},
+            {'language_policy': current.replace('multilingue-7-native-session', 'multilingue-6-ipa-delivery')},
             {'language': 'ipa-it'}, {'id': 1, 'text': '/ha/', 'role': 'Narratore'}))
 
     def test_unsupported_or_incomplete_input_fails(self):
@@ -128,6 +130,8 @@ class NativeIPATests(unittest.TestCase):
         except ImportError:
             self.skipTest('Native IPA runtime packages are optional.')
         import ctypes
+        import sintesi_lingue as native
+        native._close_native_session()
         from sintesi_lingue import synthesize_native
 
         class Identifier(ctypes.Union):
@@ -145,6 +149,7 @@ class NativeIPATests(unittest.TestCase):
         callback_type = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(ctypes.c_short), ctypes.c_int,
                                          ctypes.c_void_p)
         callbacks, emitted = [], []
+        self.addCleanup(lambda: (native._close_native_session(), callbacks.clear()))
 
         def record_callback(original):
             def receive(samples, count, pointer):
@@ -161,7 +166,7 @@ class NativeIPATests(unittest.TestCase):
 
         with patch('espeakng_loader.load_library', return_value=engine), \
                 patch.object(engine, 'espeak_Initialize',
-                             side_effect=lambda mode, size, path, options: initialize(mode, size, path, options | 3)), \
+                             side_effect=lambda mode, size, path, options: initialize(mode, size, path, options | 3)) as initialized, \
                 patch.object(engine, 'espeak_SetSynthCallback', side_effect=record_callback):
             for gender, settings in [('maschio', {}), ('femmina', {}),
                                      ('maschio', {'rate_wpm': 140, 'pitch': 35, 'range': 95, 'warmth_db': -6}),
@@ -179,6 +184,37 @@ class NativeIPATests(unittest.TestCase):
                 self.assertEqual(engine.espeak_GetParameter(1, 1), settings.get('rate_wpm', 175))
                 self.assertEqual(engine.espeak_GetParameter(3, 1), settings.get('pitch', 50))
                 self.assertEqual(engine.espeak_GetParameter(4, 1), settings.get('range', 50))
+            self.assertEqual(initialized.call_count, 1)
+
+    def test_silence_recovery_is_bounded_and_keeps_exact_input(self):
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest('Signal packages are optional.')
+        from unittest.mock import Mock
+        import sintesi_lingue as native
+        native._close_native_session()
+        for silent in (np.array([], dtype=np.float32), np.zeros(200), np.full(200, 1e-8)):
+            failed, recovered = Mock(), Mock()
+            failed.synthesize.return_value = (silent, 22050)
+            recovered.synthesize.return_value = (np.full(200, .1), 22050)
+            with patch.object(native, '_SESSION', None), \
+                    patch.object(native, '_NativeSession', side_effect=[failed, recovered]) as create:
+                result, rate = native.synthesize_native('/ˈpa/', 'ipa-it')
+                self.assertEqual(create.call_count, 2)
+                failed.close.assert_called_once()
+                self.assertEqual(failed.synthesize.call_args, recovered.synthesize.call_args)
+                self.assertGreater(float(np.max(abs(result))), .00001)
+                self.assertEqual(rate, 22050)
+        failed = Mock()
+        failed.synthesize.return_value = (np.zeros(200), 22050)
+        with patch.object(native, '_SESSION', None), \
+                patch.object(native, '_NativeSession', return_value=failed) as create:
+            with self.assertRaisesRegex(RuntimeError, '2 tentativi'):
+                native.synthesize_native('/ˈpa/', 'ipa-it')
+            self.assertEqual(create.call_count, 2)
+            self.assertEqual(failed.close.call_count, 2)
+            self.assertIsNone(native._SESSION)
 
     def test_warmth_filter_reduces_high_band_without_duration_change(self):
         try:
