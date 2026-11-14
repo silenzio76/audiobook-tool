@@ -24,6 +24,28 @@ def write_wav(path, value=4000, frames=2400):
         stream.writeframes(int(value).to_bytes(2,'little',signed=True)*frames)
 
 
+class ReferenceChoiceTests(unittest.TestCase):
+    def test_active_reference_is_selectable_and_technical_aliases_are_deduplicated(self):
+        from gestione_voci import narrator_reference_choices
+        first={'engine':'qwen3','reference':'current.json'}
+        second={'engine':'qwen3','reference':'other.json'}
+        profiles={'characters':{'Narratore':first,'Da assegnare':dict(first),
+                                'Altro':dict(first),'Another':second}}
+        def reference(path):
+            current=path=='current.json'
+            return ({'audio_sha256':'first' if current else 'second',
+                     'character':'Approved reference' if current else 'Other'},
+                    Path('reference.wav' if current else 'other.wav'))
+        with patch('profili_vocali.load',return_value=profiles), \
+                patch('qwen_backend.reference',side_effect=reference):
+            choices=narrator_reference_choices()
+        self.assertEqual(len(choices),2)
+        self.assertEqual(choices[0]['profile'],'Narratore')
+        self.assertTrue(choices[0]['current'])
+        self.assertIn('reference.wav',choices[0]['label'])
+        self.assertFalse(choices[1]['current'])
+
+
 class ConversionTests(unittest.TestCase):
     def setUp(self):
         self.temporary=tempfile.TemporaryDirectory()

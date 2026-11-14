@@ -189,6 +189,29 @@ def import_voice_reference(wav_path, name, provenance, transcript=''):
     return name
 
 
+def narrator_reference_choices():
+    """Expose verified references, including the current narrator, once per WAV."""
+    from profili_vocali import load
+    from qwen_backend import reference
+
+    profiles = load()['characters']
+    active = profiles['Narratore'].get('reference')
+    active_hash = reference(active)[0]['audio_sha256'] if active else None
+    choices, seen = [], set()
+    for name, profile in profiles.items():
+        if profile.get('engine') != 'qwen3' or profile.get('kind') == 'gruppo':
+            continue
+        metadata, wav = reference(profile['reference'])
+        digest = metadata['audio_sha256']
+        if digest in seen:
+            continue
+        seen.add(digest)
+        label = '{} · {} · {}'.format(metadata.get('character') or name, wav.name, digest[:12])
+        choices.append({'profile': name, 'label': label, 'audio': str(wav),
+                        'sha256': digest, 'current': digest == active_hash})
+    return choices
+
+
 def set_narrator_reference(name):
     from audiolibro import save
     from profili_vocali import CONFIG, load, validate

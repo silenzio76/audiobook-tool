@@ -68,6 +68,20 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(updated['segments'][0]['language'],'it')
         self.assertEqual(updated['segments'][0]['voice_model'],'source')
 
+    def test_choose_narrator_includes_current_wav_and_clears_previous_output(self):
+        choice={'profile':'Narratore','label':'Approved · reference.wav','current':True}
+        self.window.last_audio=Path('previous-reading.wav')
+        with patch('editor_document.narrator_reference_choices',return_value=[choice]), \
+                patch('editor_document.Qt.QInputDialog.getItem',return_value=(choice['label'],True)) as dialog, \
+                patch('editor_document.set_narrator_reference') as select:
+            self.window.choose_narrator()
+        self.assertEqual(dialog.call_args.args[3],[choice['label']])
+        self.assertEqual(dialog.call_args.args[4],0)
+        select.assert_called_once_with('Narratore')
+        self.assertIsNone(self.window.last_audio)
+        self.assertFalse(self.window.open_button.isEnabled())
+        self.assertIn('reference.wav',self.window.status.text())
+
     def test_pause_button_and_listen_both_resume_paused_player(self):
         self.window.update_transport()
         self.assertTrue(self.window.pause_button.isEnabled())

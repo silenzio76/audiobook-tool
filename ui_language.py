@@ -21,6 +21,9 @@ def display_tone(name):
 
 
 ENGLISH = {
+    'Importa prima un riferimento vocale WAV.': 'Import a WAV voice reference first.',
+    'Riferimento WAV da usare come voce base': 'WAV reference to use as the base voice',
+    'Riferimento del Narratore: {}': 'Narrator reference: {}',
     'Studio di lettura e voci': 'Reading and voice studio',
     '&File': '&Files', 'Documenti': 'Documents',
     'Apri documento…': 'Open document…', 'Apri documento': 'Open document',

@@ -2,6 +2,10 @@
 
 ## 0.2.0 — 2026-11-14
 
+- Fixed narrator selection hiding the active reference. Verified recorded WAVs
+  now appear with their reference names, duplicate technical roles are collapsed,
+  and the current narrator is preselected. The narrator label exposes the actual
+  WAV path/hash, and selecting a reference clears the previous output shortcut.
 - Raised offline Seed-VC conversion from 25 to 50 diffusion steps for the
   documented quality-first range. Changed settings invalidate converted caches;
   the persistent worker and original pronunciation audio remain reusable.

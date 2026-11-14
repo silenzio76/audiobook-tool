@@ -5,7 +5,7 @@ from pathlib import Path
 import os
 import wave
 from PySide6 import QtCore, QtWidgets as Qt
-from gestione_voci import assignment, change_document_voice_model, change_pause, change_spoken_text, import_voice_reference, set_narrator_reference, split_segment
+from gestione_voci import assignment, change_document_voice_model, change_pause, change_spoken_text, import_voice_reference, narrator_reference_choices, set_narrator_reference, split_segment
 from lingue_audio import LANGUAGES, segment_language, speech_parts
 from profili_vocali import load as load_profiles, tone_label
 from voice_conversion import MODELS, document_model, segment_model, installed
@@ -306,12 +306,17 @@ class EditorDocumentMixin:
         self.status.setText(tr('Profilo {} pronto per la prova con Cast separato.').format(name.strip()))
 
     def refresh_narrator_label(self):
+        details = ''
         try:
             narrator = load_profiles()['characters']['Narratore']
             if narrator.get('engine') == 'qwen3':
                 reference = Path(narrator['reference'])
                 metadata = json.loads(reference.read_text(encoding='utf-8'))
                 name = metadata.get('character') or reference.stem
+                from qwen_backend import reference as verified_reference
+                _, wav = verified_reference(reference)
+                details = str(wav) + '\nSHA-256: ' + metadata['audio_sha256']
+                name += ' · ' + wav.name
             else:
                 name = narrator['voice']
         except (OSError, ValueError, KeyError):
@@ -321,27 +326,37 @@ class EditorDocumentMixin:
             mode = 'VoiceDesign · voce fissa' if self.voice_mode.currentData() == self.audio.NARRATOR_MODE else 'VoiceDesign diretto'
             label += ' · ' + tr(mode)
         self.narrator_label.setText(label)
+        self.narrator_label.setToolTip(details)
 
     def choose_narrator(self):
-        choices = [name for name, profile in load_profiles()['characters'].items()
-                   if name != 'Narratore' and profile.get('engine') == 'qwen3'
-                   and profile.get('kind') != 'gruppo']
-        if not choices:
-            self.status.setText(tr('Importa prima un riferimento Qwen.'))
+        try:
+            choices = narrator_reference_choices()
+        except (OSError, ValueError, KeyError) as error:
+            Qt.QMessageBox.warning(self, tr('Riferimento vocale non disponibile'), str(error))
             return
-        name, ok = Qt.QInputDialog.getItem(
-            self, tr('Imposta come Narratore'), tr('Profilo da usare come voce base'), choices, editable=False)
+        if not choices:
+            self.status.setText(tr('Importa prima un riferimento vocale WAV.'))
+            return
+        labels = [choice['label'] for choice in choices]
+        current = next((i for i, choice in enumerate(choices) if choice['current']), 0)
+        selected, ok = Qt.QInputDialog.getItem(
+            self, tr('Imposta come Narratore'), tr('Riferimento WAV da usare come voce base'),
+            labels, current, False)
         if not ok:
             return
+        choice = choices[labels.index(selected)]
         try:
-            set_narrator_reference(name)
+            set_narrator_reference(choice['profile'])
         except (OSError, ValueError) as error:
             Qt.QMessageBox.warning(self, tr('Narratore non modificato'), str(error))
             return
         if self.role.findText('Narratore precedente') < 0 and 'Narratore precedente' in load_profiles()['characters']:
             self.role.addItem('Narratore precedente')
         self.refresh_narrator_label()
-        self.status.setText(tr('Il Narratore usa il riferimento di {}.').format(name))
+        self.last_audio = None
+        self.refresh_segment_audio()
+        self.update_transport()
+        self.status.setText(tr('Riferimento del Narratore: {}').format(choice['label']))
 
     def profile_created(self, name):
         self.role.addItem(name)
