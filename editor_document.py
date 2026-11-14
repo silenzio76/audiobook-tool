@@ -195,7 +195,10 @@ class EditorDocumentMixin:
             state = tr('Audio pronto') if ready else tr('Audio da generare')
             self.segment_audio_status.setText(tr('{} · Pausa dopo: {} ms').format(state, pause))
             try:
-                spoken = ''.join(part['text'] for part in self.audio.segment_speech_parts(self.plan, segment))
+                parts=self.audio.segment_speech_parts(self.plan, segment)
+                if segment_model(self.plan,segment)=='qwen-direct' and any(p.get('audio') for p in parts):
+                    self.segment_audio_status.setText(self.segment_audio_status.text()+' · '+tr('Pronuncia nativa provvisoria'))
+                spoken = ''.join(part['text'] for part in parts)
                 tooltip = tr('Pronuncia…')
                 if spoken != segment['text']:
                     tooltip += '\n' + tr('Testo inviato alla sintesi: {}').format(spoken)

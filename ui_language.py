@@ -21,6 +21,8 @@ def display_tone(name):
 
 
 ENGLISH = {
+    'Pronuncia nativa provvisoria':'Provisional native pronunciation',
+    'Voce diretta: {} nuove · {} da cache':'Direct voice: {} new · {} cached',
     'Qwen diretto · preset A/B':'Direct Qwen · A/B preset',
     'Qwen diretto · preset originale · dizione da verificare':'Direct Qwen · original preset · pronunciation pending review',
     'Qwen diretto: {} nuove · {} da cache':'Direct Qwen: {} new · {} cached',

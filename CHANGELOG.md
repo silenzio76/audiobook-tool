@@ -2,6 +2,10 @@
 
 ## 0.2.0 — 2026-11-14
 
+- Direct IPA/operational reports can bind explicitly prepared native-pronunciation
+  WAVs for unsupported languages, with file hashes, format checks and visible
+  provisional status. Short neural utterances are accepted without a one-second
+  minimum; foreign phrases are not silently routed through Italian.
 - Connected direct Qwen A/B presets to preview, playback and export. Presets use
   original conditioning/settings rather than recursively cloning imported
   synthetic WAVs. IPA test files require hash-bound orthographic counterparts;

@@ -383,7 +383,7 @@ class EditorPlaybackMixin:
             self.converted,self.total,stats['generated'],stats['cached'],stats['source'])+voice_detail)
         direct=self.direct_statistics
         if direct['generated'] or direct['cached']:
-            self.voice_label.setText(tr('Qwen diretto: {} nuove · {} da cache').format(
+            self.voice_label.setText(tr('Voce diretta: {} nuove · {} da cache').format(
                 direct['generated'],direct['cached'])+voice_detail)
         if self.pipeline.stop_event.is_set():
             self.read_label.setText(tr('Lettura arrestata'))
@@ -522,7 +522,7 @@ class EditorPlaybackMixin:
                     stats['generated'], stats['cached'], stats['source']))
             direct=self.direct_statistics
             if direct['generated'] or direct['cached']:
-                self.status.setText(tr('Qwen diretto: {} nuove · {} da cache').format(
+                self.status.setText(tr('Voce diretta: {} nuove · {} da cache').format(
                     direct['generated'],direct['cached'])+'\n'+tr('Completato. Audio: {}').format(self.last_audio))
 
     def update_transport(self):

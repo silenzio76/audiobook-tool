@@ -92,6 +92,25 @@ class DirectTests(unittest.TestCase):
         self.original.write_bytes(self.original.read_bytes()+b'changed')
         with self.assertRaises(ValueError): recipe(self.imported_meta)
 
+    def test_prepared_native_parts_validate_hash_and_do_not_italianize(self):
+        self.report['samples'][0]['operational_parts']=[{
+            'text':'قاسم','language':'ar','audio':str(self.original),
+            'audio_sha256':sha(self.original),'provisional':True}]
+        audio.save(self.mapping,self.report)
+        parts,_=operational_input(self.plan,self.plan['segments'][0])
+        self.assertEqual(parts[0]['language'],'ar')
+        self.assertEqual(parts[0]['text'],'قاسم')
+        self.assertEqual(Path(parts[0]['audio']),self.original)
+        self.original.write_bytes(self.original.read_bytes()+b'changed')
+        with self.assertRaisesRegex(ValueError,'nativa alterato'):
+            operational_input(self.plan,self.plan['segments'][0])
+
+    def test_unsupported_native_language_requires_explicit_audio(self):
+        self.report['samples'][0]['operational_parts']=[{'text':'قاسم','language':'ar'}]
+        audio.save(self.mapping,self.report)
+        with self.assertRaisesRegex(ValueError,'serve un audio nativo'):
+            operational_input(self.plan,self.plan['segments'][0])
+
     def test_malformed_mapping_and_incomplete_recipe_fail_as_validation_errors(self):
         audio.save(self.mapping,{'samples':['invalid']})
         with self.assertRaisesRegex(ValueError,'rapporto fonetico'):

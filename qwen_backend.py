@@ -193,7 +193,7 @@ def direct_clone_chunks(engine,prompts,job,text,language,revision):
                                           voice_clone_prompt=prompts[key],**item['settings'])
     samples=np.asarray(waves[0],dtype=np.float32)
     if (samples.ndim!=1 or not samples.size or not np.isfinite(samples).all()
-            or not 1<=len(samples)/rate<=max(50,len(text.split())/1.3)):
+            or not .08<=len(samples)/rate<=max(50,len(text.split())/1.3)):
         raise ValueError('Qwen diretto: audio o durata non validi.')
     yield samples,rate
 
@@ -272,7 +272,7 @@ def synthesize(job_file):
         with torch.inference_mode():
             chunks = []
             parts = job.get('parts') or speech_parts(job['text'], job.get('language', 'auto'))
-            if len({part['language'] for part in parts}) > 1:
+            if len({part['language'] for part in parts}) > 1 and not job.get('direct_neural'):
                 # Keep code-switches in the same synthesis context and speaker.
                 text = ''.join(part['text'] for part in parts)
                 parts = [{'text': text, 'language': 'auto'}]
@@ -281,6 +281,8 @@ def synthesize(job_file):
                 for text in ([part['text']] if language == 'ipa-it' or job.get('direct_neural') else split_text(part['text'])):
                     if part.get('audio'):
                         import soundfile as sf
+                        if job.get('direct_neural') and hashlib.sha256(Path(part['audio']).read_bytes()).hexdigest()!=part.get('audio_sha256'):
+                            raise ValueError('Audio nativo cambiato dopo la preparazione del lavoro.')
                         samples,sr=sf.read(part['audio'],dtype='float32')
                         if samples.ndim!=1: raise ValueError('Il WAV di pronuncia deve essere mono')
                     elif language != 'auto' and language not in QWEN:
@@ -345,10 +347,15 @@ def synthesize(job_file):
             raise ValueError(f"Segmento {job.get('segment_id', '?')} · riga {job.get('source_line', '?')}: {error}") from error
         print('Sintetizzato segmento Qwen', flush=True)
     from audiolibro import save
-    save(Path(job_file).with_suffix('.backend.json'), {'model': repo if engine is not None else 'eSpeak NG', 'revision': revision,
+    prepared_only=all(j.get('direct_neural') and all(p.get('audio') for p in j['parts']) for j in jobs)
+    save(Path(job_file).with_suffix('.backend.json'), {'model': repo if engine is not None else 'prepared-native-audio' if prepared_only else 'eSpeak NG',
+         'revision': 'validated-file' if prepared_only else revision,
          'language': 'per-fragment', 'mode': 'local-offline-voice-design' if direct else 'local-offline-synthetic-reference',
          'direct_neural':[{'segment_id':item.get('segment_id'),**item['direct_neural']}
                           for item in jobs if item.get('direct_neural')],
+         'prepared_native':[{'segment_id':j.get('segment_id'),'language':p['language'],
+                             'audio':p['audio'],'audio_sha256':p.get('audio_sha256')}
+                            for j in jobs if j.get('direct_neural') for p in j['parts'] if p.get('audio')],
          'speech_normalization': SPEECH_VERSION})
 
 

@@ -1,6 +1,7 @@
 """Validated operational text and original recipes for direct neural listening tests."""
 import hashlib
 import json
+import wave
 from pathlib import Path
 
 VERSION='direct-qwen-1'
@@ -43,6 +44,34 @@ def operational_input(plan,segment):
         raise ValueError('Qwen diretto: provenienza del campione mancante.')
     if digest(item['source'])!=item['source_sha256']:
         raise ValueError('Qwen diretto: la fonte del campione è cambiata.')
+    if 'operational_parts' in item:
+        values=item['operational_parts']
+        if not isinstance(values,list) or not values or any(not isinstance(p,dict) for p in values):
+            raise ValueError('Parti operative del segmento non valide.')
+        parts=[]
+        for part in values:
+            if not isinstance(part.get('text'),str) or not part['text'].strip():
+                raise ValueError('Testo operativo della parte mancante.')
+            language=part.get('language')
+            if part.get('audio'):
+                if not isinstance(part['audio'],str):
+                    raise ValueError('Percorso della pronuncia nativa non valido.')
+                path=Path(part['audio'])
+                if not path.is_absolute(): path=report_path.parent/path
+                if digest(path)!=part.get('audio_sha256'):
+                    raise ValueError('Audio di pronuncia nativa alterato: rigenerare la parte.')
+                with wave.open(str(path),'rb') as stream:
+                    if (stream.getnchannels(),stream.getsampwidth(),stream.getframerate())!=(1,2,22050) or stream.getnframes()==0:
+                        raise ValueError('Formato della pronuncia nativa non valido.')
+                from lingue_audio import LANGUAGES
+                if language not in LANGUAGES or language in ('auto','ipa-it'):
+                    raise ValueError('Lingua della pronuncia nativa non valida.')
+                parts.append(dict(part,audio=str(path.resolve())))
+            else:
+                if language not in QWEN:
+                    raise ValueError('Lingua non supportata: serve un audio nativo verificabile.')
+                parts.append({'text':part['text'],'language':language})
+        return parts,digest(report_path)
     return [{'text':text,'language':'it'}],digest(report_path)
 
 

@@ -13,6 +13,11 @@ report with `ipa_sha256` and per-sample `index`, `ipa`, `spoken_text`,
 reference; separate orthographic text supplies the diagnostic neural input.
 Missing or stale mappings stop the run instead of sending IPA as ordinary text.
 Naturalness approval does not certify phonetic fidelity, especially foreign names.
+Reports may supply `operational_parts` with `text`, `language`, `audio` and
+`audio_sha256` for explicitly prepared native utterances. The reader validates
+mono PCM16/22050 Hz files and their hashes before use; unsupported languages
+without prepared audio fail. Such parts are visibly provisional and may have
+a different speaker. They do not trigger an implicit Seed-VC conversion.
 Direct presets bypass eSpeak, voice-design instructions and Seed-VC. Playback,
 cache reuse, forced regeneration and export retain the model/input provenance.
 
