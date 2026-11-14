@@ -17,7 +17,9 @@ from pipeline_audio import ReadingCancelled
 HERE = Path(__file__).resolve().parent
 MODELS = {'seed-vc': 'Seed-VC · conversione vocale', 'source': 'Qwen / eSpeak · voce di base'}
 CONVERSION_VERSION = 'seed-vc-stage-1'
-SETTINGS = {'diffusion_steps': 25, 'length_adjust': 1.0, 'inference_cfg_rate': .7, 'fp16': True}
+# Prefer the documented offline quality range over the faster 25-step baseline.
+# This refines conversion; it does not certify natural prosody or IPA fidelity.
+SETTINGS = {'diffusion_steps': 50, 'length_adjust': 1.0, 'inference_cfg_rate': .7, 'fp16': True}
 
 
 def digest(path):

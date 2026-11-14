@@ -2,6 +2,10 @@
 
 ## 0.2.0 — 2026-11-14
 
+- Raised offline Seed-VC conversion from 25 to 50 diffusion steps for the
+  documented quality-first range. Changed settings invalidate converted caches;
+  the persistent worker and original pronunciation audio remain reusable.
+  Perceived naturalness still requires listening comparison.
 - Public product name: **will-o'-the-wisp**; internal `audiolibro` modules,
   settings and saved data remain compatible.
 - Added a separate offline Seed-VC voice-conversion worker between pronunciation
