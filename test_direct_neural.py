@@ -157,4 +157,43 @@ class DirectTests(unittest.TestCase):
         self.assertNotEqual(before,audio.reference_hashes(self.profiles))
 
 
+class RecoveryTests(unittest.TestCase):
+    def test_short_utterance_budget_retains_approved_long_sample_budget(self):
+        from qwen_backend import direct_token_budget
+        self.assertEqual(direct_token_budget(65,1024),1024)
+        self.assertEqual(direct_token_budget(55,1024),1024)
+        self.assertEqual(direct_token_budget(4,1024),160)
+        self.assertEqual(direct_token_budget(1,1024),128)
+
+    def test_valid_first_output_is_returned_unchanged_without_retry(self):
+        from qwen_backend import recover_direct_generation
+        value=object(); seeds=[]
+        def generate(seed): seeds.append(seed); return value
+        result,attempts=recover_direct_generation(generate,lambda result:(None,{'seconds':1.2}),1729,'Segmento 50')
+        self.assertIs(result,value)
+        self.assertEqual(seeds,[1729])
+        self.assertEqual(len(attempts),1)
+
+    def test_rejected_output_is_retried_with_same_recipe_and_next_seed(self):
+        from qwen_backend import recover_direct_generation
+        seeds=[]
+        def generate(seed): seeds.append(seed); return seed
+        def validate(value):
+            return ('audio vuoto' if value==1729 else None),{'seconds':0 if value==1729 else 1.1}
+        result,attempts=recover_direct_generation(generate,validate,1729,'Segmento 50')
+        self.assertEqual(result,1730)
+        self.assertEqual(seeds,[1729,1730])
+        self.assertEqual(attempts[0]['issue'],'audio vuoto')
+        self.assertIsNone(attempts[1]['issue'])
+
+    def test_repeated_failure_is_bounded_and_identifies_segment_and_problem(self):
+        from qwen_backend import recover_direct_generation
+        seeds=[]
+        def generate(seed): seeds.append(seed); return None
+        with self.assertRaisesRegex(ValueError,'Segmento 50 · riga 201.*3 tentativi.*durata'):
+            recover_direct_generation(generate,lambda value:('durata 0.040 s',{'seconds':.04}),1729,
+                                      'Segmento 50 · riga 201')
+        self.assertEqual(seeds,[1729,1730,1731])
+
+
 if __name__=='__main__': unittest.main()

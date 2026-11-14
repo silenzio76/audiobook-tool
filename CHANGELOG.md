@@ -2,6 +2,10 @@
 
 ## 0.2.0 — 2026-11-14
 
+- Direct Qwen retries invalid/empty/silent output with at most two additional
+  deterministic seeds while preserving the original reference and generation
+  settings. Successful first attempts remain unchanged. Reports retain attempt
+  metrics; final failures identify the segment, line and rejection reason.
 - Direct IPA/operational reports can bind explicitly prepared native-pronunciation
   WAVs for unsupported languages, with file hashes, format checks and visible
   provisional status. Short neural utterances are accepted without a one-second

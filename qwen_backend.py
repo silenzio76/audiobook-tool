@@ -170,6 +170,25 @@ def clone_chunks(engine, prompt, path, text, language, splits_left=3, *, embeddi
     yield audio[0], sr
 
 
+def direct_token_budget(word_count,preset_limit):
+    """Bound short-utterance runaways; ordinary completed output is unchanged."""
+    return min(preset_limit,max(128,24*word_count+64))
+
+
+def recover_direct_generation(generate,validate,seed,context):
+    """Retry only rejected output, at most three times; keep valid first output."""
+    attempts=[]
+    for offset in range(3):
+        current_seed=seed+offset
+        result=generate(current_seed)
+        issue,metrics=validate(result)
+        attempts.append(dict(metrics,seed=current_seed,issue=issue))
+        if issue is None:
+            return result,attempts
+    details='; '.join('seed {}: {}'.format(a['seed'],a['issue']) for a in attempts)
+    raise ValueError(context+' · Qwen diretto: audio non valido dopo 3 tentativi. '+details)
+
+
 def direct_clone_chunks(engine,prompts,job,text,language,revision):
     """Reproduce a saved direct preset without native fallback or recursive cloning."""
     import torch
@@ -188,13 +207,50 @@ def direct_clone_chunks(engine,prompts,job,text,language,revision):
         prompts[key]=engine.create_voice_clone_prompt(
             ref_audio=(samples,rate),ref_text=item['transcript'] or None,
             x_vector_only_mode=item['embedding_only'])
-    torch.manual_seed(item['seed'])
-    waves,rate=engine.generate_voice_clone(text=text,language=language,
-                                          voice_clone_prompt=prompts[key],**item['settings'])
+    options=dict(item['settings'])
+    budget=direct_token_budget(len(text.split()),options['max_new_tokens'])
+    options['max_new_tokens']=budget
+    def generate(seed):
+        torch.manual_seed(seed)
+        return engine.generate_voice_clone(text=text,language=language,
+                                            voice_clone_prompt=prompts[key],**options)
+
+    def validate(result):
+        waves,rate=result
+        if waves is None or len(waves)==0:
+            return 'nessuna onda restituita',{'frames':0,'sample_rate':rate,'seconds':None,'peak':None}
+        values=np.asarray(waves[0],dtype=np.float32)
+        finite=bool(np.isfinite(values).all())
+        frames=len(values) if values.ndim else 0
+        seconds=frames/rate if rate and rate>0 else None
+        peak=float(np.max(np.abs(values))) if values.size and finite else None
+        metrics={'frames':frames,'sample_rate':rate,'seconds':seconds,'peak':peak,'token_budget':budget}
+        if values.ndim!=1:
+            return 'audio non mono, forma '+str(values.shape),metrics
+        if not values.size:
+            return 'audio vuoto (0 campioni)',metrics
+        if not finite:
+            return 'campioni non finiti',metrics
+        if seconds is None:
+            return 'frequenza di campionamento non valida',metrics
+        # The pinned 24 kHz tokenizer decodes one code frame every 1920 samples.
+        # Hitting the budget may truncate speech; reject it rather than publish it.
+        if seconds >= (budget-2)*.08:
+            return 'limite di {} token raggiunto ({:.3f} s); audio potenzialmente troncato'.format(budget,seconds),metrics
+        maximum=max(50,len(text.split())/1.3)
+        if not .08<=seconds<=maximum:
+            return 'durata {:.3f} s fuori intervallo 0.080–{:.3f} s ({} campioni)'.format(seconds,maximum,len(values)),metrics
+        if peak<.00001:
+            return 'audio silenzioso (picco {:.8f})'.format(peak),metrics
+        return None,metrics
+
+    context='Segmento {} · riga {}'.format(job.get('segment_id','?'),job.get('source_line','?'))
+    (waves,rate),attempts=recover_direct_generation(generate,validate,item['seed'],context)
     samples=np.asarray(waves[0],dtype=np.float32)
-    if (samples.ndim!=1 or not samples.size or not np.isfinite(samples).all()
-            or not .08<=len(samples)/rate<=max(50,len(text.split())/1.3)):
-        raise ValueError('Qwen diretto: audio o durata non validi.')
+    job.setdefault('direct_generation_attempts',[]).append({
+        'text_sha256':hashlib.sha256(text.encode()).hexdigest(),'attempts':attempts})
+    if len(attempts)>1:
+        print(context+' · recupero riuscito al tentativo '+str(len(attempts)),flush=True)
     yield samples,rate
 
 
@@ -356,6 +412,9 @@ def synthesize(job_file):
          'prepared_native':[{'segment_id':j.get('segment_id'),'language':p['language'],
                              'audio':p['audio'],'audio_sha256':p.get('audio_sha256')}
                             for j in jobs if j.get('direct_neural') for p in j['parts'] if p.get('audio')],
+         'direct_generation_attempts':[{'segment_id':j.get('segment_id'),
+                                        'parts':j['direct_generation_attempts']}
+                                       for j in jobs if j.get('direct_generation_attempts')],
          'speech_normalization': SPEECH_VERSION})
 
 
