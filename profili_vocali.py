@@ -75,6 +75,9 @@ def validate(data):
         if 'preserve_formants' in item:
             if item.get('engine') != 'qwen3' or type(item['preserve_formants']) is not bool:
                 raise ValueError('Impostazione formanti Qwen non valida: ' + name)
+        if 'ipa_delivery' in item:
+            from sintesi_lingue import validate_ipa_delivery
+            validate_ipa_delivery(item['ipa_delivery'])
         for key in ('rate', 'pitch'):
             if type(item.get(key)) is not int or not -10 <= item[key] <= 10:
                 raise ValueError('Parametro fuori intervallo: ' + name + '/' + key)

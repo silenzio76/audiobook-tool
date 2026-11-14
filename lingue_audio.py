@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from numeri_italiani import spoken_it
 
-VERSION='multilingue-5-ipa-extended'
+VERSION='multilingue-6-ipa-delivery'
 LEXICON=Path(__file__).with_name('pronunce.json')
 LANGUAGES={'auto':'Automatico', 'it':'Italiano', 'el':'Greco moderno', 'ar':'Arabo',
            'en':'Inglese','fr':'Francese','de':'Tedesco','es':'Spagnolo','pt':'Portoghese','ru':'Russo','la':'Latino',

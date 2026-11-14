@@ -309,6 +309,7 @@ def render(plan_path, output, selected=None, allow_unassigned=False, cancel_even
                 if all(part['language'] == 'ipa-it' for part in parts):
                     job['character_pitch'] = 0
                     job['preserve_formants'] = False
+                    job['ipa_delivery'] = dict(base.get('ipa_delivery', {}))
             return job
 
         parts_by_id = {

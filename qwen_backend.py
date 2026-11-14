@@ -257,7 +257,8 @@ def synthesize(job_file):
                         if samples.ndim!=1: raise ValueError('Il WAV di pronuncia deve essere mono')
                     elif language != 'auto' and language not in QWEN:
                         from sintesi_lingue import synthesize_native
-                        samples,sr=synthesize_native(text,language,job.get('gender','non_specificato'))
+                        options = {'ipa_delivery': job.get('ipa_delivery', {})} if language == 'ipa-it' else {}
+                        samples,sr=synthesize_native(text,language,job.get('gender','non_specificato'), **options)
                     else:
                         if engine is None:
                             engine, revision = model(repo)

@@ -112,6 +112,16 @@ The language-policy version invalidates old cached audio after this mapping chan
 Voice spans may change timbre/prosody; native phoneme-event and PCM tests check
 technical delivery, not specialist listening acceptance.
 IPA conversion does not automatically transcribe orthographic manuscripts.
+An optional per-profile `ipa_delivery` object controls native delivery independently
+of cloned-voice settings: `rate_wpm` (integer 80–300), `pitch` and `range` (integers
+0–100), and `warmth_db` (−9 to 0). Defaults remain 175/50/50/0. For example,
+`{"rate_wpm":140,"pitch":35,"range":95,"warmth_db":-6}` slows delivery, widens
+intonation and applies a gentle shelf above 600 Hz. This can reduce measured
+differences from a reference recording; it does not clone a speaker or establish
+humanlike quality. Calibration belongs in private profiles, not public presets.
+The controls affect IPA only; the selected narrator profile supplies them in
+narrator mode and the assigned character supplies them in cast mode. Parameters
+reset on every native call, and cache identity includes profiles and policy version.
 Implementation reference: [eSpeak NG phoneme documentation](https://github.com/espeak-ng/espeak-ng/blob/master/docs/phonemes.md).
 Table definitions: [base phones](https://github.com/espeak-ng/espeak-ng/blob/master/phsource/phonemes)
 and [Arabic phones](https://github.com/espeak-ng/espeak-ng/blob/master/phsource/ph_arabic).

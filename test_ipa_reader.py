@@ -56,6 +56,8 @@ class IPATests(unittest.TestCase):
             root = Path(directory)
             with patch('profili_vocali.CONFIG', root / 'absent.json'):
                 profiles = load()
+            profiles['characters']['Narratore']['ipa_delivery'] = {
+                'rate_wpm': 140, 'pitch': 35, 'range': 95, 'warmth_db': -6}
             source = root / 'source.md'
             source.write_text('/ˈpɛska/\n', encoding='utf-8')
             path = root / 'plan.json'
@@ -70,6 +72,7 @@ class IPATests(unittest.TestCase):
             job = ready.call_args.args[1][0]
             self.assertEqual(job['parts'], [{'text':'/ˈpɛska/', 'language':'ipa-it'}])
             self.assertEqual(job['character_pitch'], 0)
+            self.assertEqual(job['ipa_delivery'], profiles['characters']['Narratore']['ipa_delivery'])
 
     def test_vowel_quality_and_stress(self):
         self.assertEqual(phoneme_input('/ˈpɛs.ka/'), "[[p'Eska]]")
@@ -97,15 +100,24 @@ class IPATests(unittest.TestCase):
 
     def test_new_ipa_policy_invalidates_previous_audio(self):
         current = audio.language_policy()
-        self.assertTrue(current.startswith('multilingue-5-ipa-extended:'))
+        self.assertTrue(current.startswith('multilingue-6-ipa-delivery:'))
         self.assertFalse(audio.cached_pronunciation_matches(
-            {'language_policy': current.replace('multilingue-5-ipa-extended', 'multilingue-4-ipa-it')},
+            {'language_policy': current.replace('multilingue-6-ipa-delivery', 'multilingue-5-ipa-extended')},
             {'language': 'ipa-it'}, {'id': 1, 'text': '/ha/', 'role': 'Narratore'}))
 
     def test_unsupported_or_incomplete_input_fails(self):
         for text in ('', 'ˈ', 'ˈp ', 'ːa', 'ã', 'ɬa', '[[a]]', '<speak>a</speak>', 'ħɛ', 'ħɣa'):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 phoneme_input(text)
+
+    def test_delivery_controls_reject_invalid_or_unbounded_values(self):
+        from sintesi_lingue import validate_ipa_delivery
+        settings = {'rate_wpm': 140, 'pitch': 35, 'range': 95, 'warmth_db': -6}
+        self.assertEqual(validate_ipa_delivery(settings), settings)
+        for value in ([], None, {'rate_wpm': True}, {'pitch': float('nan')}, {'range': 101},
+                      {'warmth_db': -10}, {'unknown': 1}, {'rate_wpm': 140.5}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate_ipa_delivery(value)
 
 
 class NativeIPATests(unittest.TestCase):
@@ -151,9 +163,12 @@ class NativeIPATests(unittest.TestCase):
                 patch.object(engine, 'espeak_Initialize',
                              side_effect=lambda mode, size, path, options: initialize(mode, size, path, options | 3)), \
                 patch.object(engine, 'espeak_SetSynthCallback', side_effect=record_callback):
-            for gender in ('maschio', 'femmina'):
+            for gender, settings in [('maschio', {}), ('femmina', {}),
+                                     ('maschio', {'rate_wpm': 140, 'pitch': 35, 'range': 95, 'warmth_db': -6}),
+                                     ('maschio', {})]:
                 emitted.clear()
-                samples, rate = synthesize_native('/ra ɾa ɹa ʁa ha ða θa ħa ʕa s̪a ha ʔa xa χa ɣa/', 'ipa-it', gender)
+                samples, rate = synthesize_native('/ra ɾa ɹa ʁa ha ða θa ħa ʕa s̪a ha ʔa xa χa ɣa/',
+                                                   'ipa-it', gender, settings)
                 self.assertGreater(rate, 0)
                 self.assertTrue(samples.size and np.isfinite(samples).all() and np.any(samples))
                 # Every consonant must reach synthesis exactly once, including
@@ -161,6 +176,29 @@ class NativeIPATests(unittest.TestCase):
                 consonants = [p for p in emitted if p and not any(v in p for v in 'aeiouˈˌ')]
                 self.assertEqual(consonants, ['r', 'ɾ', 'ɹ', 'ʁ', 'h', 'ð', 'θ', 'ħ', 'ʕ', 's̪', 'h',
                                               'ʔ', 'x', 'χ', 'ɣ'])
+                self.assertEqual(engine.espeak_GetParameter(1, 1), settings.get('rate_wpm', 175))
+                self.assertEqual(engine.espeak_GetParameter(3, 1), settings.get('pitch', 50))
+                self.assertEqual(engine.espeak_GetParameter(4, 1), settings.get('range', 50))
+
+    def test_warmth_filter_reduces_high_band_without_duration_change(self):
+        try:
+            import numpy as np
+            import scipy.signal
+        except ImportError:
+            self.skipTest('Signal packages are optional.')
+        from sintesi_lingue import soften_ipa
+        rate = 22050
+        t = np.arange(rate) / rate
+        source = .2 * np.sin(2*np.pi*100*t) + .2 * np.sin(2*np.pi*3000*t)
+        result = soften_ipa(source, rate, -6)
+        spectrum = np.abs(np.fft.rfft(result[rate//10:]))
+        frequencies = np.fft.rfftfreq(len(result[rate//10:]), 1/rate)
+        low = spectrum[np.argmin(abs(frequencies-100))]
+        high = spectrum[np.argmin(abs(frequencies-3000))]
+        self.assertEqual(len(result), len(source))
+        self.assertTrue(np.isfinite(result).all())
+        self.assertLess(high/low, .6)
+        self.assertGreater(low / (len(result[rate//10:])*.1), .9)
 
 
 if __name__ == '__main__':
