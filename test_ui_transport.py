@@ -84,6 +84,7 @@ class TransportTests(unittest.TestCase):
 
     def test_full_file_regeneration_forces_both_stages_for_every_segment(self):
         self.window.pipeline=None
+        self.assertEqual(self.window.regenerate_file_button.text(),'Rigenera tutto il file')
         source_calls=[]; converted=[]; flags=[]
         clip=Path(self.directory.name)/'generated.wav'
         with wave.open(str(clip),'wb') as stream:

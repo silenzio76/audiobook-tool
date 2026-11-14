@@ -236,7 +236,7 @@ class EditorViewMixin:
         self.button(references, tr('Importa WAV…'), self.import_reference)
         self.button(references, tr('Imposta come Narratore…'), self.choose_narrator)
         self.regenerate_file_button = self.button(starts, tr('Rigenera tutto il file'),
-                                                   self.regenerate_file, 'regenerate', accent='amber')
+                                                   self.regenerate_file, 'regenerate')
         self.regenerate_file_button.setToolTip(tr(
             'Rigenera pronuncia e voce di tutti i segmenti, ignorando la cache. Non avvia la riproduzione.'))
         voices.addStretch()
