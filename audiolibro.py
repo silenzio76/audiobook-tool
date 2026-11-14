@@ -55,6 +55,11 @@ ROLES = {
     'Altro': ('ElsaM', 0, 0),
 }
 
+def source_document_language(source):
+    """Treat explicitly named IPA Markdown as phonemic input, never prose."""
+    return 'ipa-it' if Path(source).name.lower().endswith(('.ipa.md', '.ipa.markdown')) else 'auto'
+
+
 def prepare(source, output):
     if Path(output).exists():
         raise ValueError('Il piano esiste già: scegliere un nuovo nome per conservare le attribuzioni.')
@@ -92,6 +97,8 @@ def prepare(source, output):
     plan = {'version': 1, 'source': str(source), 'sha256': hashlib.sha256(raw).hexdigest(),
             'note': 'Battute non attribuite: voce narrante, segnalazione esplicita. Non è canonizzazione.',
             'segments': segments}
+    if source_document_language(source) == 'ipa-it':
+        plan['language'] = 'ipa-it'
     save(output, plan)
     return plan
 
@@ -151,6 +158,10 @@ def read_plan(path):
     raw = Path(plan['source']).read_bytes()
     if hashlib.sha256(raw).hexdigest() != plan['sha256']:
         raise ValueError('Il manoscritto è cambiato: preparare un nuovo piano, senza sovrascrivere le attribuzioni precedenti.')
+    # Recover legacy automatic plans without rewriting assignments or source files.
+    # Explicit document and segment language choices retain precedence.
+    if plan.get('language', 'auto') == 'auto' and source_document_language(plan['source']) == 'ipa-it':
+        plan['language'] = 'ipa-it'
     profiles = load_profiles()
     for expected, segment in enumerate(plan['segments'], 1):
         if segment.get('id') != expected or not isinstance(segment.get('line'), int) or segment['line'] < 1:
