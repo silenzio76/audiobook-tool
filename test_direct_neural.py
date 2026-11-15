@@ -111,6 +111,61 @@ class DirectTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'serve un audio nativo'):
             operational_input(self.plan,self.plan['segments'][0])
 
+    def native_override_fixture(self):
+        native={'text':'قاسم','language':'ar','audio':str(self.original),
+                'audio_sha256':sha(self.original),'provisional':True}
+        self.report['samples'][0]['operational_parts']=[native]
+        audio.save(self.mapping,self.report)
+        replacement=self.root/'native-A.wav'; wav(replacement)
+        override={'part_index':0,'text':native['text'],'language':'ar',
+                  'source_audio_sha256':native['audio_sha256'],
+                  'audio':str(replacement),'audio_sha256':sha(replacement),
+                  'target_sample_sha256':sha(self.original),'provenance':'Neutral native-A fixture'}
+        return replacement,override
+
+    def test_native_override_changes_only_effective_native_audio_and_cache_identity(self):
+        replacement,override=self.native_override_fixture()
+        segment=self.plan['segments'][0]
+        old_key=audio.segment_audio_key(self.plan,segment)
+        report_before=self.mapping.read_bytes()
+        original_before=self.original.read_bytes()
+        segment['native_audio_overrides']=[override]
+        parts,_=operational_input(self.plan,segment)
+        self.assertEqual(Path(parts[0]['audio']),replacement)
+        self.assertTrue(parts[0]['provisional'])
+        self.assertEqual(parts[0]['target_sample_sha256'],sha(self.original))
+        self.assertNotEqual(old_key,audio.segment_audio_key(self.plan,segment))
+        self.assertEqual(self.mapping.read_bytes(),report_before)
+        self.assertEqual(self.original.read_bytes(),original_before)
+
+    def test_native_override_rejects_changed_audio_target_words_language_and_indices(self):
+        replacement,override=self.native_override_fixture()
+        segment=dict(self.plan['segments'][0],native_audio_overrides=[override])
+        for field,value in [('target_sample_sha256','different'),('text','other'),
+                            ('language','el'),('source_audio_sha256','wrong'),('part_index',3)]:
+            with self.subTest(field=field):
+                changed=dict(segment,native_audio_overrides=[dict(override,**{field:value})])
+                with self.assertRaises(ValueError): operational_input(self.plan,changed)
+        replacement.write_bytes(replacement.read_bytes()+b'changed')
+        with self.assertRaisesRegex(ValueError,'alterata'): operational_input(self.plan,segment)
+
+    def test_direct_preset_switch_checks_native_override_target_before_any_write(self):
+        from gestione_voci import activate_direct_preset
+        _,override=self.native_override_fixture()
+        self.plan['segments'][0]['native_audio_overrides']=[override]
+        audio.save(self.path,self.plan)
+        other_wav=self.root/'other.wav'; wav(other_wav)
+        other_wav.write_bytes(other_wav.read_bytes()+b'\x00')
+        other_meta=self.root/'other.json'
+        data=json.loads(self.imported_meta.read_text())
+        data.update(audio=other_wav.name,audio_sha256=sha(other_wav))
+        audio.save(other_meta,data)
+        self.profiles['characters']['Other']=dict(self.profiles['characters']['Narratore'],reference=str(other_meta))
+        with patch('gestione_voci.set_narrator_reference') as change:
+            with self.assertRaisesRegex(ValueError,'altro Narratore'):
+                activate_direct_preset(self.path,self.plan,'Other')
+        change.assert_not_called()
+
     def test_malformed_mapping_and_incomplete_recipe_fail_as_validation_errors(self):
         audio.save(self.mapping,{'samples':['invalid']})
         with self.assertRaisesRegex(ValueError,'rapporto fonetico'):

@@ -253,11 +253,13 @@ def activate_direct_preset(path, original, name):
     if profile.get('engine') != 'qwen3' or profile.get('kind') == 'gruppo':
         raise ValueError('Scegli un preset originale Qwen A/B.')
     preset = recipe(profile.get('reference', ''))
+    from qwen_backend import reference
+    target_metadata,_ = reference(profile['reference'])
     result['voice_model'] = 'qwen-direct'
     native = 0
     for segment in result['segments']:
         segment['voice_model'] = 'inherit'
-        parts, _ = operational_input(result, segment)
+        parts, _ = operational_input(result, segment, reference_sample_sha256=target_metadata['audio_sha256'])
         native += int(any(part.get('audio') for part in parts))
     # Detect concurrent plan changes that happened during mapping validation.
     checked_plan_copy(path, original)

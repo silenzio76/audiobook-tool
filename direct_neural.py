@@ -12,10 +12,14 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def operational_input(plan,segment):
+def operational_input(plan,segment,*,reference_sample_sha256=None):
     """Use a hash-bound orthographic counterpart; never guess prose from IPA."""
     from lingue_audio import segment_language,QWEN,speech_parts
+    if 'native_audio_overrides' in segment and not isinstance(segment['native_audio_overrides'],list):
+        raise ValueError('Sostituzioni audio native non valide.')
     if segment_language(plan,segment)!='ipa-it':
+        if segment.get('native_audio_overrides'):
+            raise ValueError('La sostituzione nativa richiede il rapporto IPA verificato.')
         parts=speech_parts(segment.get('spoken_text',segment['text']),segment_language(plan,segment))
         if any(p.get('audio') or p['language'] not in QWEN for p in parts):
             raise ValueError('Qwen diretto richiede una lingua supportata e testo operativo verificabile.')
@@ -48,8 +52,30 @@ def operational_input(plan,segment):
         values=item['operational_parts']
         if not isinstance(values,list) or not values or any(not isinstance(p,dict) for p in values):
             raise ValueError('Parti operative del segmento non valide.')
+        overrides=segment.get('native_audio_overrides',[])
+        if (not isinstance(overrides,list) or any(not isinstance(x,dict) for x in overrides)
+                or any(type(x.get('part_index')) is not int or not 0<=x['part_index']<len(values) for x in overrides)
+                or len({x['part_index'] for x in overrides})!=len(overrides)):
+            raise ValueError('Sostituzioni audio native non valide.')
+        replacements={x['part_index']:x for x in overrides}
+        if replacements:
+            if reference_sample_sha256 is None:
+                from profili_vocali import load
+                from qwen_backend import reference
+                metadata,_=reference(load()['characters']['Narratore'].get('reference',''))
+                reference_sample_sha256=metadata['audio_sha256']
+            for index,override in replacements.items():
+                original=values[index]
+                if (not original.get('audio') or override.get('text')!=original.get('text')
+                        or override.get('language')!=original.get('language')
+                        or override.get('source_audio_sha256')!=original.get('audio_sha256')):
+                    raise ValueError('Sostituzione nativa non corrispondente al testo e alla lingua originali.')
+                if override.get('target_sample_sha256')!=reference_sample_sha256:
+                    raise ValueError('Pronuncia nativa preparata per un altro Narratore: selezionare il campione corretto o rigenerarla.')
+                if not isinstance(override.get('provenance'),str) or not override['provenance'].strip():
+                    raise ValueError('Provenienza della sostituzione nativa mancante.')
         parts=[]
-        for part in values:
+        for part_index,part in enumerate(values):
             if not isinstance(part.get('text'),str) or not part['text'].strip():
                 raise ValueError('Testo operativo della parte mancante.')
             language=part.get('language')
@@ -66,12 +92,29 @@ def operational_input(plan,segment):
                 from lingue_audio import LANGUAGES
                 if language not in LANGUAGES or language in ('auto','ipa-it'):
                     raise ValueError('Lingua della pronuncia nativa non valida.')
-                parts.append(dict(part,audio=str(path.resolve())))
+                effective=dict(part,audio=str(path.resolve()))
+                if part_index in replacements:
+                    override=replacements[part_index]
+                    if not isinstance(override.get('audio'),str) or not override['audio'].strip():
+                        raise ValueError('Percorso della sostituzione nativa mancante.')
+                    replacement=Path(override['audio'])
+                    if not replacement.is_absolute(): replacement=report_path.parent/replacement
+                    if digest(replacement)!=override.get('audio_sha256'):
+                        raise ValueError('Sostituzione nativa alterata: rigenerare la parte.')
+                    with wave.open(str(replacement),'rb') as stream:
+                        if (stream.getnchannels(),stream.getsampwidth(),stream.getframerate())!=(1,2,22050) or stream.getnframes()==0:
+                            raise ValueError('Formato della sostituzione nativa non valido.')
+                    effective.update(audio=str(replacement.resolve()),audio_sha256=override['audio_sha256'],
+                                     target_sample_sha256=override['target_sample_sha256'],
+                                     provenance=override['provenance'],provisional=True)
+                parts.append(effective)
             else:
                 if language not in QWEN:
                     raise ValueError('Lingua non supportata: serve un audio nativo verificabile.')
                 parts.append({'text':part['text'],'language':language})
         return parts,digest(report_path)
+    if segment.get('native_audio_overrides'):
+        raise ValueError('Il segmento non contiene una pronuncia nativa sostituibile.')
     return [{'text':text,'language':'it'}],digest(report_path)
 
 

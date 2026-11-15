@@ -2,6 +2,9 @@
 
 ## 0.2.0 — 2026-11-14
 
+- Prepared native exceptions can use validated segment-local audio replacements
+  bound to their original words/language and target narrator sample. Only those
+  clips change cache identity; ordinary direct-Qwen clips remain reusable.
 - Apply an original natural A/B preset from one reader action: preflight every
   segment, select the narrator and direct route together, reset speed/EQ to
   neutral, and show the effective recipe. Native exceptions remain provisional;

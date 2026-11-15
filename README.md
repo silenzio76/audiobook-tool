@@ -25,6 +25,13 @@ Reports may supply `operational_parts` with `text`, `language`, `audio` and
 mono PCM16/22050 Hz files and their hashes before use; unsupported languages
 without prepared audio fail. Such parts are visibly provisional and may have
 a different speaker. They do not trigger an implicit Seed-VC conversion.
+An individual segment may carry `native_audio_overrides` for a prepared native
+part. Each replacement binds its part index, unchanged native text/language,
+original audio hash, replacement WAV/hash, target narrator sample hash and
+provenance. A mismatched narrator or altered replacement stops preparation.
+These per-segment replacements leave the shared IPA report unchanged, so only
+the affected clips receive different cache identities. Original native WAVs
+remain available and the new pronunciation remains explicitly provisional.
 Direct presets bypass eSpeak, voice-design instructions and Seed-VC. Playback,
 cache reuse, forced regeneration and export retain the model/input provenance.
 
