@@ -208,6 +208,10 @@ class EditorViewMixin:
 
         voices = self.ribbon(tr('&Voci'))
         self.voices_tab_index = self.ribbon_tabs.count()-1
+        natural = self.group(voices, tr('Lettura naturale'))
+        self.direct_preset_button = self.button(natural, tr('Usa preset naturale…'), self.use_direct_preset)
+        self.direct_preset_button.setToolTip(tr(
+            'Applica il preset originale A/B a tutto il documento, con Narratore unico, velocità normale ed equalizzazione neutra.'))
         assign_group = self.group(voices, tr('Attribuzione'))
         self.button(assign_group, tr('Assegna'), self.assign, icon.SP_DialogApplyButton)
         self.button(assign_group, tr('Prossima da assegnare'), self.next_pending, icon.SP_ArrowForward)

@@ -10,6 +10,7 @@ from lingue_audio import LANGUAGES, segment_language, speech_parts
 from profili_vocali import load as load_profiles, tone_label
 from voice_conversion import MODELS, document_model, segment_model, installed
 from version_info import PUBLIC_NAME
+from gestione_voci import direct_preset_choices, activate_direct_preset
 
 
 class EditorDocumentMixin:
@@ -80,6 +81,49 @@ class EditorDocumentMixin:
         if selected in ('seed-vc','qwen-direct'):
             self.voice_design.setChecked(False)
         self.voice_design.setEnabled(not self.busy and selected=='source')
+        if selected == 'qwen-direct':
+            try:
+                from direct_neural import recipe
+                preset = recipe(load_profiles()['characters']['Narratore'].get('reference', ''))
+                mode = 'A' if preset['embedding_only'] else 'B'
+                self.model_status.setText(tr('Qwen · preset {} · tempi naturali').format(mode))
+            except (OSError, ValueError, KeyError) as error:
+                self.model_status.setText(tr('Preset diretto non disponibile: {}').format(error))
+
+    def use_direct_preset(self):
+        if self.busy or self.path is None:
+            return
+        try:
+            choices = direct_preset_choices()
+            if not choices:
+                raise ValueError(tr('Importa un campione con la ricetta originale Qwen A/B.'))
+            labels = [item['label'] for item in choices]
+            current = next((i for i, item in enumerate(choices) if item['current']), 0)
+            selected, ok = Qt.QInputDialog.getItem(
+                self, tr('Preset di lettura naturale'), tr('Preset originale per il documento intero'),
+                labels, current, False)
+            if not ok:
+                return
+            choice = choices[labels.index(selected)]
+            updated, info = activate_direct_preset(self.path, self.plan, choice['profile'])
+        except (OSError, ValueError, KeyError) as error:
+            Qt.QMessageBox.warning(self, tr('Preset non applicato'), str(error))
+            return
+        self.plan = updated
+        self.document_model.setCurrentIndex(self.document_model.findData('qwen-direct'))
+        self.voice_mode.setCurrentIndex(self.voice_mode.findData(self.audio.NARRATOR_MODE))
+        self.reading_speed.setCurrentIndex(self.reading_speed.findData(0))
+        self.voice_design.setChecked(False)
+        from equalizzatore_voci import FLAT
+        self.set_equalizer(FLAT)
+        self.last_audio = None
+        self.rebuild_segments(max(0, self.listing.currentRow()))
+        self.refresh_model_status()
+        self.refresh_narrator_label()
+        self.refresh_segment_audio()
+        self.update_transport()
+        self.status.setText(tr('Preset {} attivo · {} segmenti · {} pronunce native provvisorie.').format(
+            info['preset'], info['segments'], info['native_segments']))
 
     def choose_library_folder(self):
         if self.busy: return
@@ -321,6 +365,13 @@ class EditorDocumentMixin:
                 _, wav = verified_reference(reference)
                 details = str(wav) + '\nSHA-256: ' + metadata['audio_sha256']
                 name += ' · ' + wav.name
+                if document_model(self.plan) == 'qwen-direct':
+                    from direct_neural import recipe
+                    preset = recipe(reference)
+                    mode = 'A' if preset['embedding_only'] else 'B'
+                    name += ' · ' + tr('preset {} · sintesi diretta').format(mode)
+                    _, original_wav = verified_reference(preset['reference'])
+                    details += '\n' + tr('Riferimento originale della ricetta: {}').format(original_wav)
             else:
                 name = narrator['voice']
         except (OSError, ValueError, KeyError):

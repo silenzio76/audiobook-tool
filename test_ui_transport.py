@@ -82,6 +82,33 @@ class TransportTests(unittest.TestCase):
         self.assertFalse(self.window.open_button.isEnabled())
         self.assertIn('reference.wav',self.window.status.text())
 
+    def test_direct_preset_action_resets_processing_and_clears_previous_output(self):
+        import copy
+        from equalizzatore_voci import FLAT
+        self.window.pipeline=None
+        self.window.reading_speed.setCurrentIndex(self.window.reading_speed.findData(2))
+        self.window.voice_design.setChecked(True)
+        self.window.eq_controls[0].setValue(6)
+        self.window.last_audio=Path('old-conversion.wav')
+        original=self.window.plan
+        updated=copy.deepcopy(original)
+        updated['voice_model']='qwen-direct'
+        for segment in updated['segments']: segment['voice_model']='inherit'
+        choice={'profile':'Narratore','label':'A · Fixture','preset':'A','current':True}
+        with patch('editor_document.direct_preset_choices',return_value=[choice]), \
+                patch('editor_document.Qt.QInputDialog.getItem',return_value=(choice['label'],True)), \
+                patch('editor_document.activate_direct_preset',return_value=(updated,
+                      {'preset':'A','segments':2,'native_segments':0})) as activate:
+            self.window.direct_preset_button.click()
+        activate.assert_called_once_with(self.window.path,original,'Narratore')
+        self.assertEqual(self.window.document_model.currentData(),'qwen-direct')
+        self.assertEqual(self.window.voice_mode.currentData(),audio.NARRATOR_MODE)
+        self.assertEqual(self.window.reading_speed.currentData(),0)
+        self.assertEqual(tuple(c.value() for c in self.window.eq_controls),FLAT)
+        self.assertFalse(self.window.voice_design.isChecked())
+        self.assertIsNone(self.window.last_audio)
+        self.assertIn('Preset A attivo',self.window.status.text())
+
     def test_full_file_regeneration_forces_both_stages_for_every_segment(self):
         self.window.pipeline=None
         self.assertEqual(self.window.regenerate_file_button.text(),'Rigenera tutto il file')

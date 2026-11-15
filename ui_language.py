@@ -21,6 +21,20 @@ def display_tone(name):
 
 
 ENGLISH = {
+    'Lettura naturale':'Natural reading',
+    'Usa preset naturale…':'Use natural preset…',
+    'Preset di lettura naturale':'Natural reading preset',
+    'Preset originale per il documento intero':'Original preset for the entire document',
+    'Importa un campione con la ricetta originale Qwen A/B.':'Import a sample with its original Qwen A/B recipe.',
+    'Preset non applicato':'Preset not applied',
+    'Qwen · preset {} · tempi naturali':'Qwen · preset {} · natural timing',
+    'Preset diretto non disponibile: {}':'Direct preset unavailable: {}',
+    'preset {} · sintesi diretta':'preset {} · direct synthesis',
+    'Riferimento originale della ricetta: {}':'Original recipe reference: {}',
+    'Preset {} attivo · {} segmenti · {} pronunce native provvisorie.':
+        'Preset {} active · {} segments · {} provisional native pronunciations.',
+    'Applica il preset originale A/B a tutto il documento, con Narratore unico, velocità normale ed equalizzazione neutra.':
+        'Apply the original A/B preset to the entire document, with one narrator, normal speed and neutral equalization.',
     'Pronuncia nativa provvisoria':'Provisional native pronunciation',
     'Voce diretta: {} nuove · {} da cache':'Direct voice: {} new · {} cached',
     'Qwen diretto · preset A/B':'Direct Qwen · A/B preset',

@@ -5,7 +5,14 @@
 The `qwen-direct` model uses a saved original generation recipe rather than
 cloning an imported synthetic sample again. Profiles must carry the original
 reference, model revision, sampling settings and conditioning mode. A/B choices
-remain ordinary narrator references in the Voices tab.
+are available through **Voices → Use natural preset…**. This validates every
+segment before applying the selected original recipe, sets the whole document
+to direct synthesis (including segment overrides), and restores one narrator,
+normal speed and neutral equalization. Missing/stale IPA mappings stop the action
+before changes. Prepared native-language exceptions remain explicitly provisional.
+The selected preset and natural timing are shown in the reader; the tooltip
+distinguishes the imported sample from the recipe's original conditioning WAV.
+Toucan-guided timing remains an external experiment and is not applied here.
 
 For an IPA document, direct synthesis requires a matching `.fonetica.json`
 report with `ipa_sha256` and per-sample `index`, `ipa`, `spoken_text`,

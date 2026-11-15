@@ -157,6 +157,80 @@ class DirectTests(unittest.TestCase):
         self.assertNotEqual(before,audio.reference_hashes(self.profiles))
 
 
+    def test_activate_preset_validates_then_replaces_route_and_overrides(self):
+        from gestione_voci import activate_direct_preset
+        config=self.root/'profiles.json'
+        audio.save(config,self.profiles)
+        original_source=self.source.read_bytes()
+        self.plan['voice_model']='seed-vc'
+        self.plan['segments'][0]['voice_model']='source'
+        audio.save(self.path,self.plan)
+        with patch('profili_vocali.CONFIG',config):
+            updated,info=activate_direct_preset(self.path,self.plan,'Narratore')
+        self.assertEqual(updated['voice_model'],'qwen-direct')
+        self.assertEqual(updated['segments'][0]['voice_model'],'inherit')
+        self.assertEqual(info,{'preset':'A','native_segments':0,'segments':1})
+        self.assertEqual(audio.read_plan(self.path),updated)
+        self.assertEqual(self.source.read_bytes(),original_source)
+
+    def test_invalid_mapping_does_not_change_narrator_or_plan(self):
+        from gestione_voci import activate_direct_preset
+        self.mapping.unlink()
+        previous=self.path.read_bytes()
+        with patch('gestione_voci.set_narrator_reference') as select:
+            with self.assertRaisesRegex(ValueError,'manca il rapporto'):
+                activate_direct_preset(self.path,self.plan,'Narratore')
+        select.assert_not_called()
+        self.assertEqual(self.path.read_bytes(),previous)
+
+    def test_reapplying_current_preset_preserves_valid_direct_cache(self):
+        from gestione_voci import activate_direct_preset
+        config=self.root/'profiles.json'
+        audio.save(config,self.profiles)
+        with patch('audiolibro.run_backend',side_effect=self.backend), \
+                patch('environment_check.ensure_generation_ready'), \
+                patch('library_updates.runtime_python',return_value=Path(__file__)), \
+                patch('profili_vocali.CONFIG',config), \
+                patch('voice_conversion.SeedWorker.convert',side_effect=AssertionError('Seed must not run')):
+            output=audio.preview(self.path,0)
+            previous=output.read_bytes()
+            activate_direct_preset(self.path,self.plan,'Narratore')
+            self.assertEqual(audio.preview(self.path,0,cache_only=True),output)
+        self.assertEqual(len(self.jobs),1)
+        self.assertEqual(output.read_bytes(),previous)
+
+    def test_plan_write_failure_restores_previous_narrator_config(self):
+        from gestione_voci import activate_direct_preset
+        config=self.root/'profiles.json'
+        self.profiles['characters']['Selected A']=copy.deepcopy(self.profiles['characters']['Narratore'])
+        self.profiles['characters']['Narratore']['reference']=str(self.root/'original.json')
+        audio.save(config,self.profiles)
+        previous=config.read_bytes(); old_plan=self.path.read_bytes()
+        real_save=audio.save
+        def persist(path,data):
+            if Path(path)==self.path: raise OSError('Simulated plan write failure')
+            real_save(path,data)
+        with patch('profili_vocali.CONFIG',config), patch('audiolibro.save',side_effect=persist):
+            with self.assertRaisesRegex(OSError,'Simulated'):
+                activate_direct_preset(self.path,self.plan,'Selected A')
+        self.assertEqual(config.read_bytes(),previous)
+        self.assertEqual(self.path.read_bytes(),old_plan)
+
+    def test_preset_catalog_preserves_distinct_recipes_for_identical_sample_wavs(self):
+        from gestione_voci import direct_preset_choices
+        other=self.root/'full-prompt.json'
+        transcript=self.root/'transcript.json'
+        audio.save(transcript,{'reference_sha256':sha(self.original),'transcript':'Reference words.'})
+        data=json.loads(self.imported_meta.read_text())
+        data['original_generation_recipe'].update(x_vector_only_mode=False,reference_transcript_file=str(transcript))
+        audio.save(other,data)
+        self.profiles['characters']['B fixture']=dict(self.profiles['characters']['Narratore'],reference=str(other))
+        choices=direct_preset_choices()
+        self.assertEqual([x['preset'] for x in choices],['A','B'])
+        self.assertTrue(choices[0]['current'])
+        self.assertFalse(choices[1]['current'])
+
+
 class RecoveryTests(unittest.TestCase):
     def test_short_utterance_budget_retains_approved_long_sample_budget(self):
         from qwen_backend import direct_token_budget

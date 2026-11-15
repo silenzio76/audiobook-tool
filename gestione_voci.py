@@ -212,6 +212,67 @@ def narrator_reference_choices():
     return choices
 
 
+def direct_preset_choices():
+    """List verified original recipes separately from generic conversion WAVs."""
+    from profili_vocali import load
+    from qwen_backend import reference
+    from direct_neural import recipe
+    import json
+
+    profiles = load()['characters']
+    result, seen = [], set()
+    active = profiles['Narratore'].get('reference')
+    for name, profile in profiles.items():
+        if profile.get('engine') != 'qwen3' or profile.get('kind') == 'gruppo':
+            continue
+        metadata, wav = reference(profile['reference'])
+        if not metadata.get('original_generation_recipe'):
+            continue
+        preset = recipe(profile['reference'])
+        identity = json.dumps(preset, sort_keys=True)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        mode = 'A' if preset['embedding_only'] else 'B'
+        label = '{} · {} · {}'.format(mode, metadata.get('character') or name, wav.name)
+        result.append({'profile': name, 'label': label, 'preset': mode,
+                       'current': profile['reference'] == active})
+    return sorted(result, key=lambda item: item['preset'])
+
+
+def activate_direct_preset(path, original, name):
+    """Validate all inputs before applying a direct narrator recipe and route."""
+    from audiolibro import save
+    from profili_vocali import CONFIG, load
+    from direct_neural import operational_input, recipe
+    from project_storage import atomic
+
+    result = checked_plan_copy(path, original)
+    profiles = load()
+    profile = profiles['characters'].get(name, {})
+    if profile.get('engine') != 'qwen3' or profile.get('kind') == 'gruppo':
+        raise ValueError('Scegli un preset originale Qwen A/B.')
+    preset = recipe(profile.get('reference', ''))
+    result['voice_model'] = 'qwen-direct'
+    native = 0
+    for segment in result['segments']:
+        segment['voice_model'] = 'inherit'
+        parts, _ = operational_input(result, segment)
+        native += int(any(part.get('audio') for part in parts))
+    # Detect concurrent plan changes that happened during mapping validation.
+    checked_plan_copy(path, original)
+    previous = CONFIG.read_bytes() if CONFIG.exists() else None
+    try:
+        set_narrator_reference(name)
+        save(path, result)
+    except (OSError, ValueError):
+        if previous is not None and CONFIG.read_bytes() != previous:
+            atomic(CONFIG, previous)
+        raise
+    return result, {'preset': 'A' if preset['embedding_only'] else 'B',
+                    'native_segments': native, 'segments': len(result['segments'])}
+
+
 def set_narrator_reference(name):
     from audiolibro import save
     from profili_vocali import CONFIG, load, validate

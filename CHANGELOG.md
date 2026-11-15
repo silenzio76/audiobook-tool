@@ -2,6 +2,10 @@
 
 ## 0.2.0 — 2026-11-14
 
+- Apply an original natural A/B preset from one reader action: preflight every
+  segment, select the narrator and direct route together, reset speed/EQ to
+  neutral, and show the effective recipe. Native exceptions remain provisional;
+  experimental Toucan timing and voice conversion are not enabled implicitly.
 - Direct Qwen retries invalid/empty/silent output with at most two additional
   deterministic seeds while preserving the original reference and generation
   settings. Successful first attempts remain unchanged. Reports retain attempt
