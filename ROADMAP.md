@@ -78,6 +78,27 @@ increment BUILD and are committed automatically through `dev_commit.py`.
   skill. Verify keyboard access, visible focus, disabled states, resizing,
   contrast and Windows DPI scaling; a smaller tab must remain discoverable.
 
+### P1 — Segment editor with a virtual special-character keyboard
+
+- Enable editing the selected segment with an integrated virtual keyboard for
+  characters unavailable on a standard physical keyboard. Cover IPA consonants,
+  vowels, primary/secondary stress, length marks and combining diacritics;
+  provide additional Unicode characters/scripts needed by the document.
+- Insert at the current cursor position or replace the selected text. Keep the
+  cursor/selection stable when a virtual key is clicked; support repeated entry,
+  undo/redo and ordinary physical typing. Group and label symbols clearly, with
+  accessible names, keyboard navigation and readable previews of combining
+  marks. Distinguish a diacritic from a standalone letter.
+- Preview and save the edit without modifying the original manuscript. Preserve
+  the previous segment version and its source binding. For IPA edits, validate
+  symbols and require reconciliation of the linked operational/phonetic JSON;
+  do not silently continue using an obsolete orthographic pronunciation.
+  Invalidate only audio that depends on the changed segment and reject stale
+  narrator-bound native replacements until their bindings are revalidated.
+- Validate cursor insertion, selection replacement, undo/redo, combining-mark
+  handling, save/reopen and regeneration of the affected segment while unrelated
+  segments and cached audio remain intact.
+
 ### P2 — Evaluate document import and pre-synthesis IPA/JSON preparation
 
 - Evaluate a staged workflow: load a supported text document, extract and review
@@ -101,7 +122,8 @@ increment BUILD and are committed automatically through `dev_commit.py`.
   full-document cost, dependencies and manual-review workload.
 
 Delivery order: address both P0 quality defects first, add segment-range reading,
-compact the Files tab, then assess the importer/IPA preparation workflow. Review
+compact the Files tab, add the segment editor's virtual keyboard, then assess
+the importer/IPA preparation workflow. Review
 the result of each bounded step before extending it to complete books.
 
 ## 1. Standalone GitHub repository and releases
