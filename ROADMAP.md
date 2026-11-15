@@ -2,11 +2,107 @@
 
 Recorded on 2026-11-09. Implementation is planned in the order below. The first milestone is a reproducible Windows tool for manuscript review. A public audiobook and a tool distributed to other authors are separate release decisions.
 
-Current status (2026-11-11): the initial public source release `v0.1.0` is
+Current checkpoint (2026-11-15): the working application is `0.2.0+build.27`.
+Direct Qwen A reading and narrator-bound prepared native replacements are
+implemented. Foreign-language vocalization has improved only partially and
+remains unsatisfactory according to author listening; it is not a closed issue.
+The immediate backlog below takes priority over discretionary timeline work.
+Entries are requirements or evaluations, not implementation-completion claims.
+
+Publication checkpoint (2026-11-11): the initial public source release `v0.1.0` is
 published at `silenzio76/audiobook-tool`. Milestone 2 has implemented English
 project materials, pinned installation profiles and preflight checks; its
 clean-Windows second-operator acceptance test remains open. Verified code changes
 increment BUILD and are committed automatically through `dev_commit.py`.
+
+## Immediate author backlog — 2026-11-15
+
+### P0 — Foreign-language voice continuity and pronunciation
+
+- Status: partially mitigated, still unsatisfactory. Prepared native passages
+  must be evaluated against the ordinary narrator, not merely accepted because
+  a WAV was generated or a speaker-embedding score increased.
+- Improve timbre continuity, naturalness and pronunciation at transitions into
+  and out of foreign speech. Keep narrative language labels distinct from the
+  language actually pronounced; retain explicit language/variety metadata and
+  the approved narrator identity. Unsupported sounds or unresolved readings
+  remain visible and provisional, without silent translation or substitution.
+- Validate short foreign passages between unchanged narrator segments at matched
+  listening level. Author listening must confirm reduced metallic quality and
+  no unacceptable speaker break; foreign pronunciation requires competent
+  language review. Record engine, reference, settings and exact tested versions.
+  Preserve accepted ordinary clips and invalidate only affected cache entries.
+
+### P0 — Slower baseline delivery, complete phrase openings and endings
+
+- The author reports rushed/abrupt phrase onsets and truncated speech,
+  especially on utterances of a few syllables and on overly long input strings.
+  Establish a slower, natural baseline reading pace, with controlled pauses and
+  preserved pitch, then validate it by listening rather than choosing an
+  untested fixed rate.
+- Treat missing syllables as a separate defect: slowing an already truncated
+  waveform cannot restore speech that was never generated or was trimmed away.
+  Inspect the raw synthesis, generation/token limits, input-unit boundaries,
+  edge trimming, mounting and playback separately. Preserve the first and last
+  phonemes and avoid excessively aggressive silence removal or abrupt joins.
+- Test one-to-three-syllable utterances, short dialogue, ordinary sentences and
+  long periods. Require complete beginnings/endings, no omitted or repeated
+  words and acceptable pacing across the sample. Retain failed takes and bind
+  results to the exact synthesis/settings version. An ASR pass alone does not
+  establish correct articulation. Detailed manual timing editing remains a
+  separate later feature; baseline pacing and truncation are immediate fixes.
+
+### P1 — Inclusive segment-range reading
+
+- Add a reading method that selects a start segment and an end segment and
+  reads that inclusive range. Show both boundaries before starting; reject
+  nonexistent/reversed ranges and support a one-segment range.
+- Analysis, preparation and cache reuse must cover the selected range. Playback
+  stops at its end and cannot continue into the following segment. Define how
+  pause/resume, seek, replay, cancellation and any duration limit interact with
+  those boundaries. Export a selected range consistently when requested, with
+  correct segment identities, ordering and timing in the index.
+- Validate first/last/single-segment ranges, cached and freshly generated clips,
+  cancellation/resume and a range containing a prepared native exception.
+
+### P1 — Compact Files tab with labeled command icons
+
+- Redesign the oversized Files tab so the tab contains only file-management
+  buttons, each with an icon and a visible text label. Keep applicable open,
+  folder-selection, import and save commands concise and easy to scan.
+- Move the large directory/file listing and path/navigation content into an
+  appropriate workspace panel or dock rather than the tab's command area.
+  Preserve existing file operations and keep audio-export commands coherent
+  with their existing export workflow.
+- Audit the current workflow before implementation and use the project UI/UX
+  skill. Verify keyboard access, visible focus, disabled states, resizing,
+  contrast and Windows DPI scaling; a smaller tab must remain discoverable.
+
+### P2 — Evaluate document import and pre-synthesis IPA/JSON preparation
+
+- Evaluate a staged workflow: load a supported text document, extract and review
+  its content, prepare a complete IPA transcription and linked JSON, validate
+  the pair, then allow audio processing. This is a feasibility item, not a
+  commitment to support every format or perform unattended phonetic conversion.
+- Inventory candidate formats and extraction quality: plain text/Markdown first;
+  assess DOCX, EPUB and text-bearing PDF separately. Define encodings, headings,
+  dialogue boundaries, reading order and unsupported-content handling. Treat
+  scanned/OCR input as a separate capability requiring review.
+- Preserve the original document. Store orthographic text and complete IPA
+  separately, with stable unit/segment correspondence, source version/hash,
+  actual spoken language/variety, pronunciation convention and unresolved items.
+  Generate the linked plan/phonetic JSON in the reader's supported schema;
+  preserve existing narrator-bound native overrides when their bindings remain
+  valid. Never send IPA as ordinary prose to a backend without phonemic support.
+- Gate audio processing on extraction coverage (no omissions/duplications),
+  valid source/IPA/JSON correspondence and explicit handling of open phonetic
+  issues. Publish validated artifacts atomically and preserve the last valid
+  set on failure. Prototype on a small multilingual fixture before assessing
+  full-document cost, dependencies and manual-review workload.
+
+Delivery order: address both P0 quality defects first, add segment-range reading,
+compact the Files tab, then assess the importer/IPA preparation workflow. Review
+the result of each bounded step before extending it to complete books.
 
 ## 1. Standalone GitHub repository and releases
 
