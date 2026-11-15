@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import os
 import wave
-from PySide6 import QtCore, QtWidgets as Qt
+from PySide6 import QtCore, QtGui, QtWidgets as Qt
 from gestione_voci import assignment, change_document_voice_model, change_pause, change_spoken_text, import_voice_reference, narrator_reference_choices, set_narrator_reference, split_segment
 from lingue_audio import LANGUAGES, segment_language, speech_parts
 from profili_vocali import load as load_profiles, tone_label
@@ -308,6 +308,14 @@ class EditorDocumentMixin:
         if self.busy and index != self.playing_index:
             self.follow_playback = False
         self.segment_label.setText(tr('Segmento {:03}  ·  Riga {}').format(segment['id'], segment['line']))
+        ipa = segment_language(self.plan, segment) == 'ipa-it'
+        font = QtGui.QFont('Consolas' if ipa else 'Georgia', 13)
+        if ipa:
+            # Keep stress markers visibly separate from their following vowel.
+            font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
+            font.setFixedPitch(True)
+            font.setKerning(False)
+        self.content.setFont(font)
         self.content.setPlainText(segment['text'])
         self.segment_pause.setValue(segment.get('pause_ms', -1))
         self.refresh_segment_audio()

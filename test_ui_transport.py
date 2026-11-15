@@ -82,6 +82,29 @@ class TransportTests(unittest.TestCase):
         self.assertFalse(self.window.open_button.isEnabled())
         self.assertIn('reference.wav',self.window.status.text())
 
+    def test_ipa_preview_preserves_stress_and_open_e_as_distinct_unicode_characters(self):
+        from PySide6 import QtGui
+        self.window.pipeline=None
+        self.window.plan['language']='ipa-it'
+        text='/ebrˈɛe/'
+        self.window.plan['segments'][0]['text']=text
+        with patch.object(self.window,'refresh_segment_audio'), patch.object(self.window,'show_language'):
+            self.window.pick(0)
+            self.assertEqual(self.window.content.toPlainText(),text)
+            self.assertNotIn('\u1f73',self.window.content.toPlainText())
+            font=self.window.content.font()
+            self.assertTrue(font.fixedPitch())
+            self.assertFalse(font.kerning())
+            self.assertEqual(font.styleHint(),QtGui.QFont.StyleHint.Monospace)
+            cursor=self.window.content.textCursor()
+            start=text.index('ebr')
+            cursor.setPosition(start)
+            cursor.setPosition(start+len('ebrˈɛe'),QtGui.QTextCursor.MoveMode.KeepAnchor)
+            self.assertEqual(cursor.selectedText(),'ebr\u02c8\u025be')
+            self.window.plan['language']='it'
+            self.window.pick(0)
+            self.assertEqual(self.window.content.font().family(),'Georgia')
+
     def test_direct_preset_action_resets_processing_and_clears_previous_output(self):
         import copy
         from equalizzatore_voci import FLAT

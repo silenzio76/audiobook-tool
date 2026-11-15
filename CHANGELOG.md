@@ -2,6 +2,9 @@
 
 ## 0.2.0 — 2026-11-14
 
+- Show IPA segment previews in a fixed-pitch font without kerning, separating
+  stress markers from vowel glyphs. Literal Unicode text, sources and audio
+  remain unchanged; ordinary prose retains its existing font.
 - Prepared native exceptions can use validated segment-local audio replacements
   bound to their original words/language and target narrator sample. Only those
   clips change cache identity; ordinary direct-Qwen clips remain reusable.
